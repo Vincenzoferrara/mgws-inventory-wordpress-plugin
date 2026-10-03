@@ -240,6 +240,16 @@ class MGWS_REST_API {
             'args' => $this->empty_route_args(),
         ));
 
+        register_rest_route('mgws/v1', '/pos/receipts/(?P<receipt_ident>[^/]+)/status', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_pos_checkout'),
+            'callback' => array($this, 'route_pos_receipt_status'),
+            'args' => array(
+                'status' => array('required' => true, 'type' => 'string', 'sanitize_callback' => 'sanitize_key', 'validate_callback' => array($this, 'validate_pos_receipt_status')),
+                'note' => $this->inventory_text_arg(),
+            ),
+        ));
+
         register_rest_route('mgws/v1', '/pos/settings', array(
             array(
                 'methods' => 'GET',
@@ -5157,6 +5167,9 @@ private function pos_receipt_row_to_array(array $row) {
         'returns_total' => (float) ($row['returns_total'] ?? 0),
         'net_total' => (float) ($row['net_total'] ?? 0),
         'issued_at' => (string) ($row['issued_at_gmt'] ?? ''),
+        'corrections' => !empty($row['corrections'])
+            ? json_decode((string) $row['corrections'], true)
+            : array(),
     );
 }
 
@@ -5169,6 +5182,48 @@ private function pos_receipt_row_to_array(array $row) {
  * Returns the returnable remainder per line after the returns just recorded,
  * so the app does not have to recompute it.
  */
+/**
+ * Annulla un documento o gli appende una rettifica.
+ *
+ * Lo storico deve poter essere corretto, ma le correzioni restano tracciate:
+ * l'annullamento non cancella la riga e ogni rettifica viene conservata.
+ * Cancels a document or appends a correction to it. Corrections are tracked:
+ * cancelling never deletes the row and every note is preserved.
+ */
+public function route_pos_receipt_status(WP_REST_Request $request) {
+    $ident = (string) $request->get_param('receipt_ident');
+    $row = MGWS_DB::get_pos_receipt_by_key($ident);
+    if (!is_array($row)) {
+        $row = preg_match('/^[0-9]+$/', $ident) === 1
+            ? MGWS_DB::get_pos_receipt_by_id((int) $ident)
+            : null;
+    }
+    if (!is_array($row)) {
+        return new WP_Error('mgws_receipt_not_found', 'POS receipt not found', array('status' => 404));
+    }
+
+    $status = sanitize_key((string) $request->get_param('status'));
+    $note = sanitize_textarea_field((string) ($request->get_param('note') ?? ''));
+    $updated = MGWS_DB::update_pos_receipt_status((int) $row['id'], $status, $note);
+    if (is_wp_error($updated)) {
+        return $updated;
+    }
+
+    return rest_ensure_response(array(
+        'success' => true,
+        'receipt' => $this->pos_receipt_row_to_array($updated),
+        'corrections' => MGWS_DB::get_pos_receipt_corrections((int) $row['id']),
+    ));
+}
+
+private function validate_pos_receipt_status($value) {
+    return in_array(
+        (string) $value,
+        array('paid', 'cancelled', 'refunded'),
+        true
+    );
+}
+
 private function pos_returnable_map(array $return_items) {
     $map = array();
     $seen = array();

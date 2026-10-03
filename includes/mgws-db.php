@@ -1883,6 +1883,69 @@ public static function issue_pos_receipt(array $row) {
     return array('row' => is_array($saved) ? $saved : array(), 'replayed' => false);
 }
 
+/**
+ * Cambia lo stato del documento o gli appende una rettifica.
+ *
+ * Lo storico contabile non si cancella: l'annullamento e' uno stato e le
+ * rettifiche restano in elenco, quindi il documento resta ricostruibile.
+ * Changes the document status or appends a correction. Accounting history is
+ * never deleted: cancelling is a status and corrections are kept.
+ */
+public static function update_pos_receipt_status($receipt_id, $status, $note = '') {
+    global $wpdb;
+
+    $table = self::table_pos_receipts();
+    $row = self::get_pos_receipt_by_id($receipt_id);
+    if (!is_array($row)) {
+        return new WP_Error('mgws_receipt_not_found', 'POS receipt not found', array('status' => 404));
+    }
+    if (($row['status'] ?? '') === 'cancelled' && $status !== 'cancelled') {
+        return new WP_Error(
+            'mgws_receipt_cancelled',
+            'A cancelled receipt cannot change state',
+            array('status' => 409)
+        );
+    }
+
+    $corrections = self::get_pos_receipt_corrections($receipt_id);
+    if ($note !== '') {
+        $corrections[] = array(
+            'note' => $note,
+            'status' => $status,
+            'by' => get_current_user_id(),
+            'at' => gmdate('c'),
+        );
+    }
+
+    $wpdb->update(
+        $table,
+        array(
+            'status' => $status,
+            'corrections' => wp_json_encode($corrections),
+        ),
+        array('id' => (int) $receipt_id)
+    );
+
+    return self::get_pos_receipt_by_id($receipt_id);
+}
+
+/**
+ * Rettifiche del documento, in ordine di registrazione.
+ * Returns the corrections recorded on a document.
+ */
+public static function get_pos_receipt_corrections($receipt_id) {
+    global $wpdb;
+    $raw = $wpdb->get_var($wpdb->prepare(
+        'SELECT corrections FROM ' . self::table_pos_receipts() . ' WHERE id = %d',
+        (int) $receipt_id
+    ));
+    if (empty($raw)) {
+        return array();
+    }
+    $decoded = json_decode((string) $raw, true);
+    return is_array($decoded) ? $decoded : array();
+}
+
 public static function get_pos_receipt_by_id($receipt_id) {
     global $wpdb;
     $row = $wpdb->get_row($wpdb->prepare(
@@ -2277,6 +2340,7 @@ public static function insert_pos_shift($row) {
             tax_rate DECIMAL(5,2) NOT NULL DEFAULT 0,
             discount_total DECIMAL(15,4) NOT NULL DEFAULT 0,
             coupon_discount DECIMAL(15,4) NOT NULL DEFAULT 0,
+            corrections LONGTEXT NULL,
             total DECIMAL(15,4) NOT NULL DEFAULT 0,
             sales_total DECIMAL(15,4) NOT NULL DEFAULT 0,
             returns_total DECIMAL(15,4) NOT NULL DEFAULT 0,
