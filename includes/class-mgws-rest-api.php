@@ -4708,6 +4708,63 @@ class MGWS_REST_API {
                 $order->update_status($order_status);
             }
 
+            // Progressivo scontrino: in simulazione lo assegna il server, con
+            // registratore telematico lo emette il dispositivo e l'app lo
+            // invia gia' valorizzato in receipt_number.
+            // Receipt number: simulation allocates server-side, a fiscal
+            // register issues it and the app sends it as receipt_number.
+            // Il documento si identifica con l'idempotency key gia' risolto dal
+            // checkout, cosi' lo stesso scontrino non genera mai due righe.
+            // The document reuses the idempotency key already resolved by the
+            // checkout, so the same receipt never produces two rows.
+            $receipt_key = $idempotency_key !== '' ? $idempotency_key : ('order-' . $order_id);
+            $register_name = '';
+            $business_day_id = '';
+            foreach ($meta_data as $meta) {
+                if (!is_array($meta)) {
+                    continue;
+                }
+                $meta_key = (string) ($meta['key'] ?? '');
+                if ($meta_key === '_cassa_nome') {
+                    $register_name = sanitize_text_field((string) ($meta['value'] ?? ''));
+                } elseif ($meta_key === '_giornata_id') {
+                    $business_day_id = sanitize_text_field((string) ($meta['value'] ?? ''));
+                }
+            }
+            $device_receipt_number = trim((string) ($body['receipt_number'] ?? ''));
+            $issued = MGWS_DB::issue_pos_receipt(array(
+                'receipt_key' => $receipt_key,
+                'business_day_id' => $business_day_id,
+                'register_name' => $register_name,
+                'sequential_number' => $device_receipt_number !== '' ? $device_receipt_number : 0,
+                'status' => 'paid',
+                'operation_type' => $effective_operation_type,
+                'shift_id' => $pos_shift_id,
+                'order_id' => $order_id,
+                'idempotency_key' => $idempotency_key,
+                'payment_method' => $payment_method,
+                'customer_id' => $order->get_customer_id() > 0 ? (int) $order->get_customer_id() : 0,
+                'customer_name' => trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name()),
+                'subtotal' => (float) ($totals['subtotale'] ?? $totals['subtotal'] ?? 0),
+                'vat_total' => (float) ($totals['iva'] ?? 0),
+                'discount_total' => (float) ($totals['sconto'] ?? 0),
+                'total' => (float) ($totals['totale'] ?? 0),
+                'issued_at_gmt' => gmdate('Y-m-d H:i:s'),
+                'created_by' => get_current_user_id(),
+            ));
+            if (is_wp_error($issued)) {
+                // Lo scontrino e' dato fiscale: senza progressivo non si puo'
+                // concludere la vendita, quindi il checkout fallisce e
+                // l'ordine viene rimosso come in ogni altro errore.
+                throw new Exception('Unable to record POS receipt');
+            }
+            $receipt_row = $issued['row'] ?? array();
+            $sequential_number = (int) ($receipt_row['sequential_number'] ?? 0);
+            if ($sequential_number > 0) {
+                update_post_meta($order_id, '_mgws_pos_receipt_sequential_number', $sequential_number);
+                update_post_meta($order_id, '_mgws_pos_receipt_key', $receipt_key);
+            }
+
             $response = array(
                 'success' => true,
                 'ok' => true,
@@ -4718,6 +4775,8 @@ class MGWS_REST_API {
                 'totals' => $audit['totals'],
                 'sale_items' => $sale_audit,
                 'return_items' => $return_audit,
+                'receipt_key' => $receipt_key,
+                'sequential_number' => $sequential_number,
             );
             if ($idempotency_reserved) {
                 $response['idempotency'] = array(

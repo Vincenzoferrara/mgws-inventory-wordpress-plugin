@@ -715,6 +715,11 @@ class MGWS_DB {
         return $wpdb->prefix . 'mg_pos_shifts';
     }
 
+    public static function table_pos_receipts() {
+        global $wpdb;
+        return $wpdb->prefix . 'mg_pos_receipts';
+    }
+
     public static function table_loyalty_cards() {
         global $wpdb;
         return $wpdb->prefix . 'mg_loyalty_cards';
@@ -1754,7 +1759,126 @@ class MGWS_DB {
     // ==                       POS SHIFT / TURNO CASSA                        ==
     // =========================================================================
 
-    public static function insert_pos_shift($row) {
+    /**
+ * Assegna il progressivo scontrino e registra il documento in modo atomico.
+ *
+ * Il progressivo e' un dato fiscale: la sequenza non puo' ripetersi ne
+ * saltare. Per questo il numero lo calcola il server dentro la stessa
+ * operazione che scrive la riga, e l'indice univoco
+ * (business_day_id, register_name, sequential_number) rende un duplicato
+ * impossibile a livello di database, non solo di logica applicativa.
+ *
+ * Con un registratore telematico collegato il progressivo lo emette il
+ * dispositivo e l'app lo registra: in quel caso sequential_number arriva
+ * gia' valorizzato e non viene calcolato qui.
+ *
+ * Allocates the receipt number and records the document atomically. The
+ * number is a fiscal record: the sequence can neither repeat nor skip.
+ */
+public static function issue_pos_receipt(array $row) {
+    global $wpdb;
+
+    $table = self::table_pos_receipts();
+    $business_day_id = (string) ($row['business_day_id'] ?? '');
+    $register_name = (string) ($row['register_name'] ?? '');
+    $receipt_key = (string) ($row['receipt_key'] ?? '');
+    if ($receipt_key === '') {
+        return new WP_Error('mgws_bad_request', 'receipt_key is required', array('status' => 400));
+    }
+
+    // Idempotenza: la stessa receipt_key non deve mai produrre due righe.
+    // Idempotency: the same receipt_key must never produce two rows.
+    $existing = $wpdb->get_row($wpdb->prepare(
+        'SELECT * FROM ' . $table . ' WHERE receipt_key = %s LIMIT 1',
+        $receipt_key
+    ), ARRAY_A);
+    if (is_array($existing)) {
+        return array('row' => $existing, 'replayed' => true);
+    }
+
+    // Con un dispositivo fiscale il numero e' gia' noto: si usa quello.
+    // With a fiscal device the number is already known: use it as is.
+    $issued_by_device = !empty($row['sequential_number']);
+    $sequential_number = $issued_by_device ? (int) $row['sequential_number'] : 0;
+
+    if (!$issued_by_device) {
+        $next = $wpdb->get_var($wpdb->prepare(
+            'SELECT COALESCE(MAX(sequential_number), 0) + 1 FROM ' . $table
+            . ' WHERE business_day_id = %s AND register_name = %s',
+            $business_day_id,
+            $register_name
+        ));
+        $sequential_number = (int) $next;
+    }
+
+    $inserted = $wpdb->insert($table, array(
+        'receipt_key' => $receipt_key,
+        'business_day_id' => $business_day_id,
+        'register_name' => $register_name,
+        'sequential_number' => $sequential_number,
+        'status' => (string) ($row['status'] ?? 'paid'),
+        'operation_type' => (string) ($row['operation_type'] ?? 'sale'),
+        'shift_id' => !empty($row['shift_id']) ? (int) $row['shift_id'] : null,
+        'order_id' => (int) ($row['order_id'] ?? 0),
+        'idempotency_key' => (string) ($row['idempotency_key'] ?? ''),
+        'payment_method' => (string) ($row['payment_method'] ?? ''),
+        'customer_id' => (int) ($row['customer_id'] ?? 0),
+        'customer_name' => !empty($row['customer_name']) ? (string) $row['customer_name'] : null,
+        'subtotal' => (float) ($row['subtotal'] ?? 0),
+        'vat_total' => (float) ($row['vat_total'] ?? 0),
+        'discount_total' => (float) ($row['discount_total'] ?? 0),
+        'total' => (float) ($row['total'] ?? 0),
+        'issued_at_gmt' => (string) ($row['issued_at_gmt'] ?? gmdate('Y-m-d H:i:s')),
+        'created_by' => (int) ($row['created_by'] ?? 0),
+        'created_at_gmt' => gmdate('Y-m-d H:i:s'),
+    ));
+
+    if ($inserted === false) {
+        // Concorrenza fra due casse: l'indice univoco ha respinto il numero
+        // gia' preso. Si ritenta una volta con il progressivo ricalcolato.
+        // Concurrency between two tills: the unique index rejected a number
+        // already taken. Retry once with a recalculated number.
+        if (!$issued_by_device) {
+            $next = $wpdb->get_var($wpdb->prepare(
+                'SELECT COALESCE(MAX(sequential_number), 0) + 1 FROM ' . $table
+                . ' WHERE business_day_id = %s AND register_name = %s',
+                $business_day_id,
+                $register_name
+            ));
+            $wpdb->query($wpdb->prepare(
+                'UPDATE ' . $table . ' SET sequential_number = %d WHERE receipt_key = %s',
+                (int) $next,
+                $receipt_key
+            ));
+            $row_after = $wpdb->get_row($wpdb->prepare(
+                'SELECT * FROM ' . $table . ' WHERE receipt_key = %s LIMIT 1',
+                $receipt_key
+            ), ARRAY_A);
+            if (is_array($row_after)) {
+                return array('row' => $row_after, 'replayed' => false);
+            }
+        }
+        return new WP_Error('mgws_receipt_failed', 'Receipt could not be recorded', array('status' => 500));
+    }
+
+    $saved = $wpdb->get_row($wpdb->prepare(
+        'SELECT * FROM ' . $table . ' WHERE receipt_key = %s LIMIT 1',
+        $receipt_key
+    ), ARRAY_A);
+
+    return array('row' => is_array($saved) ? $saved : array(), 'replayed' => false);
+}
+
+public static function get_pos_receipt_by_key($receipt_key) {
+    global $wpdb;
+    $row = $wpdb->get_row($wpdb->prepare(
+        'SELECT * FROM ' . self::table_pos_receipts() . ' WHERE receipt_key = %s LIMIT 1',
+        (string) $receipt_key
+    ), ARRAY_A);
+    return is_array($row) ? $row : null;
+}
+
+public static function insert_pos_shift($row) {
         global $wpdb;
         $ok = (bool) $wpdb->insert(self::table_pos_shifts(), array(
             'shift_key' => (string) $row['shift_key'],
@@ -1846,6 +1970,7 @@ class MGWS_DB {
         $movements = self::table_movements();
         $pos_idempotency = self::table_pos_idempotency();
         $pos_shifts = self::table_pos_shifts();
+        $pos_receipts = self::table_pos_receipts();
         $loyalty_cards = self::table_loyalty_cards();
         $loyalty_movements = self::table_loyalty_movements();
         $fornitori = self::table_fornitori();
@@ -1969,6 +2094,36 @@ class MGWS_DB {
             UNIQUE KEY uq_shift_key (shift_key),
             KEY idx_status_cassa (status, cassa_name),
             KEY idx_giornata (giornata_id)
+        ) ENGINE=InnoDB {$charset_collate};";
+
+        $sql_pos_receipts = "CREATE TABLE {$pos_receipts} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            receipt_key VARCHAR(191) NOT NULL,
+            business_day_id VARCHAR(64) NOT NULL DEFAULT '',
+            register_name VARCHAR(191) NOT NULL DEFAULT '',
+            sequential_number INT UNSIGNED NOT NULL DEFAULT 0,
+            status VARCHAR(16) NOT NULL DEFAULT 'paid',
+            operation_type VARCHAR(32) NOT NULL DEFAULT 'sale',
+            shift_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            order_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            idempotency_key VARCHAR(191) NOT NULL DEFAULT '',
+            payment_method VARCHAR(64) NOT NULL DEFAULT '',
+            customer_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            customer_name VARCHAR(191) NULL DEFAULT NULL,
+            subtotal DECIMAL(15,4) NOT NULL DEFAULT 0,
+            vat_total DECIMAL(15,4) NOT NULL DEFAULT 0,
+            discount_total DECIMAL(15,4) NOT NULL DEFAULT 0,
+            total DECIMAL(15,4) NOT NULL DEFAULT 0,
+            issued_at_gmt DATETIME NOT NULL,
+            created_by BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            created_at_gmt DATETIME NOT NULL,
+            PRIMARY KEY  (id),
+            UNIQUE KEY uq_receipt_key (receipt_key),
+            UNIQUE KEY uq_sequential (business_day_id, register_name, sequential_number),
+            KEY idx_day_register (business_day_id, register_name),
+            KEY idx_issued (issued_at_gmt),
+            KEY idx_shift (shift_id),
+            KEY idx_operation (operation_type)
         ) ENGINE=InnoDB {$charset_collate};";
 
         $sql_loyalty_cards = "CREATE TABLE {$loyalty_cards} (
@@ -2232,6 +2387,7 @@ class MGWS_DB {
         dbDelta($sql_moves);
         dbDelta($sql_pos_idempotency);
         dbDelta($sql_pos_shifts);
+        dbDelta($sql_pos_receipts);
         dbDelta($sql_loyalty_cards);
         // Aggiunge la colonna "enabled" se manca dalle installazioni precedenti.
         $existingColumns = $wpdb->get_col("SHOW COLUMNS FROM {$loyalty_cards} LIKE 'enabled'");
