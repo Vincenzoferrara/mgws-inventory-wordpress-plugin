@@ -1823,16 +1823,25 @@ public static function issue_pos_receipt(array $row) {
         'sequential_number' => $sequential_number,
         'status' => (string) ($row['status'] ?? 'paid'),
         'operation_type' => (string) ($row['operation_type'] ?? 'sale'),
-        'shift_id' => !empty($row['shift_id']) ? (int) $row['shift_id'] : null,
+            'shift_id' => !empty($row['shift_id']) ? (int) $row['shift_id'] : null,
         'order_id' => (int) ($row['order_id'] ?? 0),
         'idempotency_key' => (string) ($row['idempotency_key'] ?? ''),
+        'coupon_code' => (string) ($row['coupon_code'] ?? ''),
+        'note' => !empty($row['note']) ? (string) $row['note'] : null,
         'payment_method' => (string) ($row['payment_method'] ?? ''),
         'customer_id' => (int) ($row['customer_id'] ?? 0),
         'customer_name' => !empty($row['customer_name']) ? (string) $row['customer_name'] : null,
         'subtotal' => (float) ($row['subtotal'] ?? 0),
         'vat_total' => (float) ($row['vat_total'] ?? 0),
+        'tax_rate' => (float) ($row['tax_rate'] ?? 0),
         'discount_total' => (float) ($row['discount_total'] ?? 0),
+        'coupon_discount' => (float) ($row['coupon_discount'] ?? 0),
         'total' => (float) ($row['total'] ?? 0),
+        'sales_total' => (float) ($row['sales_total'] ?? 0),
+        'returns_total' => (float) ($row['returns_total'] ?? 0),
+        'net_total' => (float) ($row['net_total'] ?? 0),
+        'received_amount' => (float) ($row['received_amount'] ?? 0),
+        'change_amount' => (float) ($row['change_amount'] ?? 0),
         'issued_at_gmt' => (string) ($row['issued_at_gmt'] ?? gmdate('Y-m-d H:i:s')),
         'created_by' => (int) ($row['created_by'] ?? 0),
         'created_at_gmt' => gmdate('Y-m-d H:i:s'),
@@ -1952,12 +1961,15 @@ public static function save_pos_receipt_lines($receipt_id, array $lines) {
  */
 public static function get_pos_receipt_sold_lines($receipt_key) {
     global $wpdb;
+    // Gli apici espliciti evitano che i segnaposto diventino letterali senza
+    // virgolette e rompano l'IN.
+    // Explicit quoting keeps the placeholders from becoming unquoted literals
+    // and breaking the IN clause.
     $rows = $wpdb->get_results($wpdb->prepare(
         'SELECT rl.* FROM ' . self::table_pos_receipt_lines() . ' rl'
         . ' INNER JOIN ' . self::table_pos_receipts() . ' r ON r.id = rl.receipt_id'
-        . ' WHERE r.receipt_key = %s AND rl.movement_type = %s',
-        (string) $receipt_key,
-        'sale'
+        . ' WHERE r.receipt_key = %s AND r.operation_type IN (\'sale\', \'exchange\')',
+        (string) $receipt_key
     ), ARRAY_A);
     return is_array($rows) ? $rows : array();
 }
@@ -1982,13 +1994,24 @@ public static function get_pos_returnable_quantities($receipt_key) {
         return array();
     }
 
+    // Le righe vendute di un documento sono gia' al netto delle righe di reso
+    // dello stesso documento, quindi si contano solo quelle col movement_type
+    // 'vendita': cosi' un cambio non torna due volte nel totale.
     $sold_by_key = array();
     foreach ($sold as $line) {
-        $sold_by_key[(string) $line['line_key']] = (int) $line['quantity'];
+        $line_key = (string) $line['line_key'];
+        $movement = (string) ($line['movement_type'] ?? '');
+        $quantity = (int) $line['quantity'];
+        if ($movement === 'return') {
+            // Un reso dentro il documento di origine riduce il venduto.
+            $sold_by_key[$line_key] = ($sold_by_key[$line_key] ?? 0) - abs($quantity);
+            continue;
+        }
+        $sold_by_key[$line_key] = ($sold_by_key[$line_key] ?? 0) + $quantity;
     }
 
     $returns = $wpdb->get_results($wpdb->prepare(
-        'SELECT rl.source_line_key, SUM(rl.quantity) AS returned_quantity FROM '
+        'SELECT rl.source_line_key, SUM(ABS(rl.quantity)) AS returned_quantity FROM '
         . self::table_pos_receipt_lines() . ' rl'
         . ' INNER JOIN ' . self::table_pos_receipts() . ' r ON r.id = rl.receipt_id'
         . ' WHERE rl.movement_type = %s AND rl.source_receipt_key = %s'
@@ -2244,13 +2267,22 @@ public static function insert_pos_shift($row) {
             shift_id BIGINT UNSIGNED NULL DEFAULT NULL,
             order_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
             idempotency_key VARCHAR(191) NOT NULL DEFAULT '',
+            coupon_code VARCHAR(191) NOT NULL DEFAULT '',
+            note TEXT NULL,
             payment_method VARCHAR(64) NOT NULL DEFAULT '',
             customer_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
             customer_name VARCHAR(191) NULL DEFAULT NULL,
             subtotal DECIMAL(15,4) NOT NULL DEFAULT 0,
             vat_total DECIMAL(15,4) NOT NULL DEFAULT 0,
+            tax_rate DECIMAL(5,2) NOT NULL DEFAULT 0,
             discount_total DECIMAL(15,4) NOT NULL DEFAULT 0,
+            coupon_discount DECIMAL(15,4) NOT NULL DEFAULT 0,
             total DECIMAL(15,4) NOT NULL DEFAULT 0,
+            sales_total DECIMAL(15,4) NOT NULL DEFAULT 0,
+            returns_total DECIMAL(15,4) NOT NULL DEFAULT 0,
+            net_total DECIMAL(15,4) NOT NULL DEFAULT 0,
+            received_amount DECIMAL(15,4) NOT NULL DEFAULT 0,
+            change_amount DECIMAL(15,4) NOT NULL DEFAULT 0,
             issued_at_gmt DATETIME NOT NULL,
             created_by BIGINT UNSIGNED NOT NULL DEFAULT 0,
             created_at_gmt DATETIME NOT NULL,

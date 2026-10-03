@@ -4766,7 +4766,16 @@ class MGWS_REST_API {
                 'shift_id' => $pos_shift_id,
                 'order_id' => $order_id,
                 'idempotency_key' => $idempotency_key,
+                'coupon_code' => sanitize_text_field((string) ($totals['coupon_code'] ?? '')),
+                'note' => $customer_note !== '' ? $customer_note : null,
                 'payment_method' => $payment_method,
+                'tax_rate' => (float) ($totals['aliquota_iva'] ?? 22),
+                'coupon_discount' => (float) ($totals['coupon_sconto'] ?? 0),
+                'sales_total' => (float) ($totals['totale_vendite'] ?? 0),
+                'returns_total' => (float) ($totals['totale_resi'] ?? 0),
+                'net_total' => (float) ($totals['saldo_operazione'] ?? 0),
+                'received_amount' => (float) ($totals['resto'] ?? 0),
+                'change_amount' => (float) ($totals['resto'] ?? 0),
                 'customer_id' => $order->get_customer_id() > 0 ? (int) $order->get_customer_id() : 0,
                 'customer_name' => trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name()),
                 'subtotal' => (float) ($totals['subtotale'] ?? $totals['subtotal'] ?? 0),
@@ -4790,8 +4799,18 @@ class MGWS_REST_API {
             if ($receipt_id > 0) {
                 $receipt_lines = array_merge($sale_items, $return_items);
                 $vat_rate = (float) ($totals['aliquota_iva'] ?? 22);
+                $operation_kind = 'sale';
+                if ((int) ($totals['totale_resi'] ?? 0) > 0) {
+                    $operation_kind = 'return';
+                } elseif ((int) ($totals['totale_vendite'] ?? 0) > 0 && (int) ($totals['totale_resi'] ?? 0) < 0) {
+                    $operation_kind = 'exchange';
+                }
                 foreach ($receipt_lines as $index => $receipt_line) {
                     $receipt_lines[$index]['vat_rate'] = $vat_rate;
+                    // La classe dell'operazione sta nell'intestazione, non
+                    // sulla riga: e' il documento a dire se e' vendita, reso o
+                    // cambio, cosi' i totali non dipendono dalle righe.
+                    $receipt_lines[$index]['operation_kind'] = $operation_kind;
                 }
                 MGWS_DB::save_pos_receipt_lines($receipt_id, $receipt_lines);
             }
@@ -4991,8 +5010,37 @@ public function route_pos_receipt_list(WP_REST_Request $request) {
 
     $summary_sql = 'SELECT COALESCE(SUM(total),0) AS total, COALESCE(SUM(vat_total),0) AS vat_total,'
         . ' COALESCE(SUM(subtotal),0) AS subtotal, COALESCE(SUM(discount_total),0) AS discount_total,'
+        . ' COALESCE(SUM(sales_total),0) AS sales_total, COALESCE(SUM(returns_total),0) AS returns_total,'
+        . ' COALESCE(SUM(CASE WHEN total < 0 THEN -total ELSE 0 END),0) AS refunds_total,'
+        . ' SUM(CASE WHEN operation_type = %s THEN 1 ELSE 0 END) AS sales_count,'
+        . ' SUM(CASE WHEN operation_type = %s THEN 1 ELSE 0 END) AS returns_count,'
+        . ' SUM(CASE WHEN operation_type = %s THEN 1 ELSE 0 END) AS exchanges_count,'
         . ' COUNT(*) AS document_count FROM ' . $table . ' WHERE ' . $where_sql;
-    $summary = $wpdb->get_row($wpdb->prepare($summary_sql, $params), ARRAY_A);
+    $summary = $wpdb->get_row($wpdb->prepare(
+        $summary_sql,
+        array_merge(array('sale', 'return', 'exchange'), $params)
+    ), ARRAY_A);
+
+    // Totali per metodo di pagamento: servono alla chiusura del turno, che
+    // confronta atteso e contato senza rileggere ogni documento.
+    $method_sql = 'SELECT payment_method,'
+        . ' SUM(CASE WHEN total >= 0 THEN total ELSE 0 END) AS collected,'
+        . ' SUM(CASE WHEN total < 0 THEN -total ELSE 0 END) AS refunded,'
+        . ' COUNT(*) AS document_count'
+        . ' FROM ' . $table . ' WHERE ' . $where_sql
+        . " AND payment_method <> '' GROUP BY payment_method";
+    $method_rows = $wpdb->get_results($wpdb->prepare($method_sql, $params), ARRAY_A);
+    $by_method = array();
+    if (is_array($method_rows)) {
+        foreach ($method_rows as $method_row) {
+            $by_method[] = array(
+                'payment_method' => (string) $method_row['payment_method'],
+                'collected' => (float) $method_row['collected'],
+                'refunded' => (float) $method_row['refunded'],
+                'document_count' => (int) $method_row['document_count'],
+            );
+        }
+    }
 
     $receipts = array();
     if (is_array($rows)) {
@@ -5009,7 +5057,14 @@ public function route_pos_receipt_list(WP_REST_Request $request) {
             'vat_total' => (float) ($summary['vat_total'] ?? 0),
             'subtotal' => (float) ($summary['subtotal'] ?? 0),
             'discount_total' => (float) ($summary['discount_total'] ?? 0),
+            'sales_total' => (float) ($summary['sales_total'] ?? 0),
+            'returns_total' => (float) ($summary['returns_total'] ?? 0),
+            'refunds_total' => (float) ($summary['refunds_total'] ?? 0),
+            'sales_count' => (int) ($summary['sales_count'] ?? 0),
+            'returns_count' => (int) ($summary['returns_count'] ?? 0),
+            'exchanges_count' => (int) ($summary['exchanges_count'] ?? 0),
             'document_count' => (int) ($summary['document_count'] ?? 0),
+            'by_payment_method' => $by_method,
         ),
         'total_rows' => $total_rows,
         'limit' => $limit,
@@ -5087,13 +5142,20 @@ private function pos_receipt_row_to_array(array $row) {
         'operation_type' => (string) ($row['operation_type'] ?? ''),
         'shift_id' => (int) ($row['shift_id'] ?? 0),
         'order_id' => (int) ($row['order_id'] ?? 0),
+        'coupon_code' => (string) ($row['coupon_code'] ?? ''),
+        'note' => (string) ($row['note'] ?? ''),
         'payment_method' => (string) ($row['payment_method'] ?? ''),
         'customer_id' => (int) ($row['customer_id'] ?? 0),
         'customer_name' => (string) ($row['customer_name'] ?? ''),
         'subtotal' => (float) ($row['subtotal'] ?? 0),
         'vat_total' => (float) ($row['vat_total'] ?? 0),
+        'tax_rate' => (float) ($row['tax_rate'] ?? 0),
         'discount_total' => (float) ($row['discount_total'] ?? 0),
+        'coupon_discount' => (float) ($row['coupon_discount'] ?? 0),
         'total' => (float) ($row['total'] ?? 0),
+        'sales_total' => (float) ($row['sales_total'] ?? 0),
+        'returns_total' => (float) ($row['returns_total'] ?? 0),
+        'net_total' => (float) ($row['net_total'] ?? 0),
         'issued_at' => (string) ($row['issued_at_gmt'] ?? ''),
     );
 }
