@@ -228,6 +228,10 @@ class MGWS_REST_API {
                 'business_day_id' => $this->inventory_text_arg(),
                 'register_name' => $this->inventory_text_arg(),
                 'operation_type' => $this->inventory_text_arg(),
+                'payment_method' => $this->inventory_text_arg(),
+                'status' => $this->inventory_text_arg(),
+                'customer_id' => $this->inventory_non_negative_int_arg(0),
+                'query' => $this->inventory_text_arg(),
                 'limit' => $this->inventory_non_negative_int_arg(100),
                 'offset' => $this->inventory_non_negative_int_arg(0),
             ),
@@ -247,6 +251,34 @@ class MGWS_REST_API {
             'args' => array(
                 'status' => array('required' => true, 'type' => 'string', 'sanitize_callback' => 'sanitize_key', 'validate_callback' => array($this, 'validate_pos_receipt_status')),
                 'note' => $this->inventory_text_arg(),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/pos/closings', array(
+            array(
+                'methods' => 'GET',
+                'permission_callback' => array($this, 'perm_stock_read'),
+                'callback' => array($this, 'route_pos_closing_list'),
+                'args' => array(
+                    'business_day_id' => $this->inventory_text_arg(),
+                    'register_name' => $this->inventory_text_arg(),
+                    'limit' => $this->inventory_non_negative_int_arg(100),
+                ),
+            ),
+            array(
+                'methods' => 'POST',
+                'permission_callback' => array($this, 'perm_pos_checkout'),
+                'callback' => array($this, 'route_pos_closing_create'),
+                'args' => $this->pos_closing_args(),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/pos/closings/(?P<closing_ident>[^/]+)/corrections', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_pos_checkout'),
+            'callback' => array($this, 'route_pos_closing_corrections'),
+            'args' => array(
+                'note' => array('required' => true, 'type' => 'string', 'sanitize_callback' => 'sanitize_textarea_field', 'validate_callback' => array($this, 'validate_inventory_text')),
             ),
         ));
 
@@ -4810,6 +4842,7 @@ class MGWS_REST_API {
                 $receipt_lines = array_merge($sale_items, $return_items);
                 $vat_rate = (float) ($totals['aliquota_iva'] ?? 22);
                 $operation_kind = 'sale';
+                $operation_reference = trim((string) ($body['customer_id'] ?? ''));
                 if ((int) ($totals['totale_resi'] ?? 0) > 0) {
                     $operation_kind = 'return';
                 } elseif ((int) ($totals['totale_vendite'] ?? 0) > 0 && (int) ($totals['totale_resi'] ?? 0) < 0) {
@@ -4988,6 +5021,10 @@ public function route_pos_receipt_list(WP_REST_Request $request) {
     $business_day_id = sanitize_text_field((string) $request->get_param('business_day_id'));
     $register_name = sanitize_text_field((string) $request->get_param('register_name'));
     $operation_type = sanitize_key((string) $request->get_param('operation_type'));
+    $payment_method = sanitize_key((string) $request->get_param('payment_method'));
+    $status = sanitize_key((string) $request->get_param('status'));
+    $customer_id = (int) ($request->get_param('customer_id') ?: 0);
+    $query = sanitize_text_field((string) ($request->get_param('query') ?? ''));
     $limit = (int) ($request->get_param('limit') ?: 100);
     $offset = (int) ($request->get_param('offset') ?: 0);
     $limit = max(1, min(500, $limit));
@@ -5008,6 +5045,41 @@ public function route_pos_receipt_list(WP_REST_Request $request) {
     if ($operation_type !== '') {
         $where[] = 'operation_type = %s';
         $params[] = $operation_type;
+    }
+    if ($payment_method !== '') {
+        $where[] = 'payment_method = %s';
+        $params[] = $payment_method;
+    }
+    if ($status !== '') {
+        $where[] = 'status = %s';
+        $params[] = $status;
+    }
+    if ($customer_id > 0) {
+        $where[] = 'customer_id = %d';
+        $params[] = $customer_id;
+    }
+    // La ricerca guarda cliente, progressivo e chiave documento: sono i campi
+    // che l'operatore usa per ritrovare una vendita. Il confronto numerico
+    // vale solo se il testo e' un numero, altrimenti "Rossi" diventerebbe 0 e
+    // aggancerebbe ogni documento senza ordine.
+    // Search covers customer, receipt number and document key. The numeric
+    // comparison only applies to numeric input, otherwise a name would become
+    // 0 and match every document without an order.
+    if ($query !== '') {
+        $like = '%' . $wpdb->esc_like($query) . '%';
+        $clauses = array(
+            'customer_name LIKE %s',
+            'receipt_key LIKE %s',
+        );
+        $query_params = array($like, $like);
+        if (ctype_digit($query)) {
+            $clauses[] = 'order_id = %d';
+            $clauses[] = 'sequential_number = %d';
+            $query_params[] = (int) $query;
+            $query_params[] = (int) $query;
+        }
+        $where[] = '(' . implode(' OR ', $clauses) . ')';
+        $params = array_merge($params, $query_params);
     }
     $where_sql = implode(' AND ', $where);
 
@@ -5214,6 +5286,149 @@ public function route_pos_receipt_status(WP_REST_Request $request) {
         'receipt' => $this->pos_receipt_row_to_array($updated),
         'corrections' => MGWS_DB::get_pos_receipt_corrections((int) $row['id']),
     ));
+}
+
+private function pos_closing_args() {
+    return array(
+        'closing_key' => array('required' => true, 'type' => 'string', 'sanitize_callback' => array($this, 'sanitize_pos_shift_key'), 'validate_callback' => array($this, 'validate_pos_shift_key')),
+        'business_day_id' => $this->inventory_text_arg(),
+        'register_name' => $this->inventory_text_arg(),
+        'location' => $this->inventory_text_arg(),
+        'shift_id' => $this->inventory_non_negative_int_arg(0),
+        'operator_id' => $this->inventory_non_negative_int_arg(0),
+        'operator_name' => $this->inventory_text_arg(),
+        'opening_float' => $this->pos_float_arg(0),
+        'cash_collected' => $this->pos_float_arg(0),
+        'card_collected' => $this->pos_float_arg(0),
+        'other_collected' => $this->pos_float_arg(0),
+        'refunds' => $this->pos_float_arg(0),
+        'manual_in' => $this->pos_float_arg(0),
+        'manual_out' => $this->pos_float_arg(0),
+        'cash_counted' => $this->pos_float_arg(0),
+        'card_counted' => $this->pos_float_arg(0),
+        'difference_reason' => $this->inventory_text_arg(),
+        'note' => $this->inventory_text_arg(),
+    );
+}
+
+/**
+ * Storico chiusure di turno.
+ *
+ * Vive sul server perche' una chiusura e' un dato contabile: deve
+ * sopravvivere al dispositivo che l'ha prodotta.
+ * Shift closing history, kept server-side because a closing is an accounting
+ * record that must outlive the device that produced it.
+ */
+public function route_pos_closing_list(WP_REST_Request $request) {
+    $rows = MGWS_DB::list_pos_closings(array(
+        'business_day_id' => (string) $request->get_param('business_day_id'),
+        'register_name' => (string) $request->get_param('register_name'),
+        'limit' => (int) ($request->get_param('limit') ?: 100),
+    ));
+    $closings = array();
+    foreach ($rows as $row) {
+        $closings[] = $this->pos_closing_row_to_array($row);
+    }
+    return rest_ensure_response(array(
+        'success' => true,
+        'closings' => $closings,
+        'total_rows' => count($closings),
+    ));
+}
+
+public function route_pos_closing_create(WP_REST_Request $request) {
+    $issued = MGWS_DB::insert_pos_closing(array(
+        'closing_key' => (string) $request->get_param('closing_key'),
+        'business_day_id' => (string) ($request->get_param('business_day_id') ?? ''),
+        'register_name' => (string) ($request->get_param('register_name') ?? ''),
+        'location' => (string) ($request->get_param('location') ?? ''),
+        'shift_id' => (int) ($request->get_param('shift_id') ?? 0),
+        'operator_id' => (int) ($request->get_param('operator_id') ?? 0),
+        'operator_name' => (string) ($request->get_param('operator_name') ?? ''),
+        'opening_float' => (float) ($request->get_param('opening_float') ?? 0),
+        'cash_collected' => (float) ($request->get_param('cash_collected') ?? 0),
+        'card_collected' => (float) ($request->get_param('card_collected') ?? 0),
+        'other_collected' => (float) ($request->get_param('other_collected') ?? 0),
+        'refunds' => (float) ($request->get_param('refunds') ?? 0),
+        'manual_in' => (float) ($request->get_param('manual_in') ?? 0),
+        'manual_out' => (float) ($request->get_param('manual_out') ?? 0),
+        'cash_counted' => (float) ($request->get_param('cash_counted') ?? 0),
+        'card_counted' => (float) ($request->get_param('card_counted') ?? 0),
+        'difference_reason' => (string) ($request->get_param('difference_reason') ?? ''),
+        'note' => (string) ($request->get_param('note') ?? ''),
+        'closed_at_gmt' => gmdate('Y-m-d H:i:s'),
+        'created_by' => get_current_user_id(),
+    ));
+    if (is_wp_error($issued)) {
+        return $issued;
+    }
+    return rest_ensure_response(array(
+        'success' => true,
+        'replayed' => !empty($issued['replayed']),
+        'closing' => $this->pos_closing_row_to_array($issued['row']),
+    ));
+}
+
+public function route_pos_closing_corrections(WP_REST_Request $request) {
+    $ident = (string) $request->get_param('closing_ident');
+    $row = MGWS_DB::get_pos_closing($ident);
+    if (!is_array($row)) {
+        $row = preg_match('/^[0-9]+$/', $ident) === 1
+            ? MGWS_DB::get_pos_closing_by_id((int) $ident)
+            : null;
+    }
+    if (!is_array($row)) {
+        return new WP_Error('mgws_closing_not_found', 'Shift closing not found', array('status' => 404));
+    }
+    $corrections = MGWS_DB::update_pos_closing_corrections(
+        (int) $row['id'],
+        (string) $request->get_param('note')
+    );
+    if (is_wp_error($corrections)) {
+        return $corrections;
+    }
+    return rest_ensure_response(array(
+        'success' => true,
+        'corrections' => $corrections,
+    ));
+}
+
+private function pos_closing_row_to_array(array $row) {
+    $cash_collected = (float) ($row['cash_collected'] ?? 0);
+    $card_collected = (float) ($row['card_collected'] ?? 0);
+    $cash_counted = (float) ($row['cash_counted'] ?? 0);
+    $card_counted = (float) ($row['card_counted'] ?? 0);
+    return array(
+        'closing_key' => (string) ($row['closing_key'] ?? ''),
+        'business_day_id' => (string) ($row['business_day_id'] ?? ''),
+        'register_name' => (string) ($row['register_name'] ?? ''),
+        'location' => (string) ($row['location'] ?? ''),
+        'shift_id' => (int) ($row['shift_id'] ?? 0),
+        'operator_id' => (int) ($row['operator_id'] ?? 0),
+        'operator_name' => (string) ($row['operator_name'] ?? ''),
+        'opening_float' => (float) ($row['opening_float'] ?? 0),
+        'cash_collected' => $cash_collected,
+        'card_collected' => $card_collected,
+        'other_collected' => (float) ($row['other_collected'] ?? 0),
+        'refunds' => (float) ($row['refunds'] ?? 0),
+        'manual_in' => (float) ($row['manual_in'] ?? 0),
+        'manual_out' => (float) ($row['manual_out'] ?? 0),
+        'cash_counted' => $cash_counted,
+        'card_counted' => $card_counted,
+        'cash_expected' => $cash_collected + (float) ($row['opening_float'] ?? 0)
+            + (float) ($row['manual_in'] ?? 0) - (float) ($row['manual_out'] ?? 0)
+            - (float) ($row['refunds'] ?? 0),
+        'cash_difference' => $cash_counted - ($cash_collected + (float) ($row['opening_float'] ?? 0)
+            + (float) ($row['manual_in'] ?? 0) - (float) ($row['manual_out'] ?? 0)
+            - (float) ($row['refunds'] ?? 0)),
+        'card_difference' => $card_counted - $card_collected,
+        'difference_reason' => (string) ($row['difference_reason'] ?? ''),
+        'note' => (string) ($row['note'] ?? ''),
+        'closed_at' => (string) ($row['closed_at_gmt'] ?? ''),
+        'corrections' => !empty($row['corrections'])
+            ? json_decode((string) $row['corrections'], true)
+            : array(),
+    );
 }
 
 private function validate_pos_receipt_status($value) {

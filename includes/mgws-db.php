@@ -725,6 +725,11 @@ class MGWS_DB {
         return $wpdb->prefix . 'mg_pos_receipt_lines';
     }
 
+    public static function table_pos_closings() {
+        global $wpdb;
+        return $wpdb->prefix . 'mg_pos_closings';
+    }
+
     public static function table_loyalty_cards() {
         global $wpdb;
         return $wpdb->prefix . 'mg_loyalty_cards';
@@ -1933,6 +1938,147 @@ public static function update_pos_receipt_status($receipt_id, $status, $note = '
  * Rettifiche del documento, in ordine di registrazione.
  * Returns the corrections recorded on a document.
  */
+/**
+ * Chiusure di turno, ordinate dalla piu' recente.
+ *
+ * Lo storico delle chiusure vive sul server perche' una chiusura e' un dato
+ * contabile: deve sopravvivere al dispositivo che l'ha prodotta.
+ * Shift closings, newest first. The closing history lives server-side because
+ * a closing is an accounting record and must outlive the device.
+ */
+public static function list_pos_closings($filters = array()) {
+    global $wpdb;
+    $table = self::table_pos_closings();
+    $where = array('1=1');
+    $params = array();
+    if (!empty($filters['business_day_id'])) {
+        $where[] = 'business_day_id = %s';
+        $params[] = (string) $filters['business_day_id'];
+    }
+    if (!empty($filters['register_name'])) {
+        $where[] = 'register_name = %s';
+        $params[] = (string) $filters['register_name'];
+    }
+    $limit = max(1, min(500, (int) ($filters['limit'] ?? 100)));
+    $sql = 'SELECT * FROM ' . $table . ' WHERE ' . implode(' AND ', $where)
+        . ' ORDER BY id DESC LIMIT %d';
+    $rows = $wpdb->get_results($wpdb->prepare($sql, array_merge($params, array($limit))), ARRAY_A);
+    return is_array($rows) ? $rows : array();
+}
+
+public static function get_pos_closing_by_id($closing_id) {
+    global $wpdb;
+    $row = $wpdb->get_row($wpdb->prepare(
+        'SELECT * FROM ' . self::table_pos_closings() . ' WHERE id = %d LIMIT 1',
+        (int) $closing_id
+    ), ARRAY_A);
+    return is_array($row) ? $row : null;
+}
+
+public static function get_pos_closing($closing_key) {
+    global $wpdb;
+    $row = $wpdb->get_row($wpdb->prepare(
+        'SELECT * FROM ' . self::table_pos_closings() . ' WHERE closing_key = %s LIMIT 1',
+        (string) $closing_key
+    ), ARRAY_A);
+    return is_array($row) ? $row : null;
+}
+
+/**
+ * Registra la chiusura di un turno. La chiave rende l'operazione idempotente,
+ * cosi' un doppio invio non crea due chiusure per lo stesso turno.
+ * Records a shift closing. The key makes the operation idempotent, so a double
+ * submit cannot create two closings for the same shift.
+ */
+public static function insert_pos_closing(array $row) {
+    global $wpdb;
+    $table = self::table_pos_closings();
+    $closing_key = (string) ($row['closing_key'] ?? '');
+    if ($closing_key === '') {
+        return new WP_Error('mgws_bad_request', 'closing_key is required', array('status' => 400));
+    }
+    $existing = $wpdb->get_row($wpdb->prepare(
+        'SELECT * FROM ' . $table . ' WHERE closing_key = %s LIMIT 1',
+        $closing_key
+    ), ARRAY_A);
+    if (is_array($existing)) {
+        return array('row' => $existing, 'replayed' => true);
+    }
+
+    $wpdb->insert($table, array(
+        'closing_key' => $closing_key,
+        'business_day_id' => (string) ($row['business_day_id'] ?? ''),
+        'register_name' => (string) ($row['register_name'] ?? ''),
+        'location' => !empty($row['location']) ? (string) $row['location'] : null,
+        'shift_id' => (int) ($row['shift_id'] ?? 0),
+        'operator_id' => (int) ($row['operator_id'] ?? 0),
+        'operator_name' => !empty($row['operator_name']) ? (string) $row['operator_name'] : null,
+        'opening_float' => (float) ($row['opening_float'] ?? 0),
+        'cash_collected' => (float) ($row['cash_collected'] ?? 0),
+        'card_collected' => (float) ($row['card_collected'] ?? 0),
+        'other_collected' => (float) ($row['other_collected'] ?? 0),
+        'refunds' => (float) ($row['refunds'] ?? 0),
+        'manual_in' => (float) ($row['manual_in'] ?? 0),
+        'manual_out' => (float) ($row['manual_out'] ?? 0),
+        'cash_counted' => (float) ($row['cash_counted'] ?? 0),
+        'card_counted' => (float) ($row['card_counted'] ?? 0),
+        'difference_reason' => !empty($row['difference_reason']) ? (string) $row['difference_reason'] : null,
+        'note' => !empty($row['note']) ? (string) $row['note'] : null,
+        'closed_at_gmt' => (string) ($row['closed_at_gmt'] ?? gmdate('Y-m-d H:i:s')),
+        'created_by' => (int) ($row['created_by'] ?? 0),
+        'created_at_gmt' => gmdate('Y-m-d H:i:s'),
+    ));
+
+    $saved = $wpdb->get_row($wpdb->prepare(
+        'SELECT * FROM ' . $table . ' WHERE closing_key = %s LIMIT 1',
+        $closing_key
+    ), ARRAY_A);
+    if (!is_array($saved)) {
+        return new WP_Error('mgws_closing_failed', 'Shift closing could not be recorded', array('status' => 500));
+    }
+    return array('row' => $saved, 'replayed' => false);
+}
+
+public static function get_pos_closing_corrections($closing_id) {
+    global $wpdb;
+    $raw = $wpdb->get_var($wpdb->prepare(
+        'SELECT corrections FROM ' . self::table_pos_closings() . ' WHERE id = %d',
+        (int) $closing_id
+    ));
+    if (empty($raw)) {
+        return array();
+    }
+    $decoded = json_decode((string) $raw, true);
+    return is_array($decoded) ? $decoded : array();
+}
+
+/**
+ * Appende una rettifica alla chiusura, senza cambiarne i totali.
+ * Appends a correction to a closing without altering its totals.
+ */
+public static function update_pos_closing_corrections($closing_id, $note) {
+    global $wpdb;
+    $row = $wpdb->get_row($wpdb->prepare(
+        'SELECT * FROM ' . self::table_pos_closings() . ' WHERE id = %d',
+        (int) $closing_id
+    ), ARRAY_A);
+    if (!is_array($row)) {
+        return new WP_Error('mgws_closing_not_found', 'Shift closing not found', array('status' => 404));
+    }
+    $corrections = self::get_pos_closing_corrections($closing_id);
+    $corrections[] = array(
+        'note' => (string) $note,
+        'by' => get_current_user_id(),
+        'at' => gmdate('c'),
+    );
+    $wpdb->update(
+        self::table_pos_closings(),
+        array('corrections' => wp_json_encode($corrections)),
+        array('id' => (int) $closing_id)
+    );
+    return self::get_pos_closing_corrections($closing_id);
+}
+
 public static function get_pos_receipt_corrections($receipt_id) {
     global $wpdb;
     $raw = $wpdb->get_var($wpdb->prepare(
@@ -2194,6 +2340,7 @@ public static function insert_pos_shift($row) {
         $pos_shifts = self::table_pos_shifts();
         $pos_receipts = self::table_pos_receipts();
         $pos_receipt_lines = self::table_pos_receipt_lines();
+        $pos_closings = self::table_pos_closings();
         $loyalty_cards = self::table_loyalty_cards();
         $loyalty_movements = self::table_loyalty_movements();
         $fornitori = self::table_fornitori();
@@ -2384,6 +2531,37 @@ public static function insert_pos_shift($row) {
             KEY idx_receipt (receipt_id),
             KEY idx_line_key (receipt_id, line_key),
             KEY idx_source (source_receipt_key, source_line_key)
+        ) ENGINE=InnoDB {$charset_collate};";
+
+        $sql_pos_closings = "CREATE TABLE {$pos_closings} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            closing_key VARCHAR(191) NOT NULL,
+            business_day_id VARCHAR(64) NOT NULL DEFAULT '',
+            register_name VARCHAR(191) NOT NULL DEFAULT '',
+            location VARCHAR(191) NULL DEFAULT NULL,
+            shift_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            operator_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            operator_name VARCHAR(191) NULL DEFAULT NULL,
+            opening_float DECIMAL(15,4) NOT NULL DEFAULT 0,
+            cash_collected DECIMAL(15,4) NOT NULL DEFAULT 0,
+            card_collected DECIMAL(15,4) NOT NULL DEFAULT 0,
+            other_collected DECIMAL(15,4) NOT NULL DEFAULT 0,
+            refunds DECIMAL(15,4) NOT NULL DEFAULT 0,
+            manual_in DECIMAL(15,4) NOT NULL DEFAULT 0,
+            manual_out DECIMAL(15,4) NOT NULL DEFAULT 0,
+            cash_counted DECIMAL(15,4) NOT NULL DEFAULT 0,
+            card_counted DECIMAL(15,4) NOT NULL DEFAULT 0,
+            difference_reason VARCHAR(191) NULL DEFAULT NULL,
+            note TEXT NULL,
+            corrections LONGTEXT NULL,
+            closed_at_gmt DATETIME NOT NULL,
+            created_by BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            created_at_gmt DATETIME NOT NULL,
+            PRIMARY KEY  (id),
+            UNIQUE KEY uq_closing_key (closing_key),
+            KEY idx_day_register (business_day_id, register_name),
+            KEY idx_shift (shift_id),
+            KEY idx_closed (closed_at_gmt)
         ) ENGINE=InnoDB {$charset_collate};";
 
         $sql_loyalty_cards = "CREATE TABLE {$loyalty_cards} (
@@ -2649,6 +2827,7 @@ public static function insert_pos_shift($row) {
         dbDelta($sql_pos_shifts);
         dbDelta($sql_pos_receipts);
         dbDelta($sql_pos_receipt_lines);
+        dbDelta($sql_pos_closings);
         dbDelta($sql_loyalty_cards);
         // Aggiunge la colonna "enabled" se manca dalle installazioni precedenti.
         $existingColumns = $wpdb->get_col("SHOW COLUMNS FROM {$loyalty_cards} LIKE 'enabled'");
