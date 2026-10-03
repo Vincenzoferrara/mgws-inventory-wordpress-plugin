@@ -220,6 +220,26 @@ class MGWS_REST_API {
             'args' => $this->pos_shift_close_args(),
         ));
 
+        register_rest_route('mgws/v1', '/pos/receipts', array(
+            'methods' => 'GET',
+            'permission_callback' => array($this, 'perm_stock_read'),
+            'callback' => array($this, 'route_pos_receipt_list'),
+            'args' => array(
+                'business_day_id' => $this->inventory_text_arg(),
+                'register_name' => $this->inventory_text_arg(),
+                'operation_type' => $this->inventory_text_arg(),
+                'limit' => $this->inventory_non_negative_int_arg(100),
+                'offset' => $this->inventory_non_negative_int_arg(0),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/pos/receipts/(?P<receipt_ident>[^/]+)', array(
+            'methods' => 'GET',
+            'permission_callback' => array($this, 'perm_stock_read'),
+            'callback' => array($this, 'route_pos_receipt_get'),
+            'args' => $this->empty_route_args(),
+        ));
+
         register_rest_route('mgws/v1', '/pos/settings', array(
             array(
                 'methods' => 'GET',
@@ -4731,6 +4751,10 @@ class MGWS_REST_API {
                     $business_day_id = sanitize_text_field((string) ($meta['value'] ?? ''));
                 }
             }
+            // Le righe rendono il documento leggibile dal server e permettono di
+            // controllare i resi su dati reali.
+            // Lines make the document readable server-side and allow returns
+            // to be enforced against real data.
             $device_receipt_number = trim((string) ($body['receipt_number'] ?? ''));
             $issued = MGWS_DB::issue_pos_receipt(array(
                 'receipt_key' => $receipt_key,
@@ -4759,6 +4783,18 @@ class MGWS_REST_API {
                 throw new Exception('Unable to record POS receipt');
             }
             $receipt_row = $issued['row'] ?? array();
+            if (!empty($issued['replayed']) && empty($issued['row'])) {
+                $receipt_row = array();
+            }
+            $receipt_id = (int) ($receipt_row['id'] ?? 0);
+            if ($receipt_id > 0) {
+                $receipt_lines = array_merge($sale_items, $return_items);
+                $vat_rate = (float) ($totals['aliquota_iva'] ?? 22);
+                foreach ($receipt_lines as $index => $receipt_line) {
+                    $receipt_lines[$index]['vat_rate'] = $vat_rate;
+                }
+                MGWS_DB::save_pos_receipt_lines($receipt_id, $receipt_lines);
+            }
             $sequential_number = (int) ($receipt_row['sequential_number'] ?? 0);
             if ($sequential_number > 0) {
                 update_post_meta($order_id, '_mgws_pos_receipt_sequential_number', $sequential_number);
@@ -4777,6 +4813,7 @@ class MGWS_REST_API {
                 'return_items' => $return_audit,
                 'receipt_key' => $receipt_key,
                 'sequential_number' => $sequential_number,
+                'returnable' => $this->pos_returnable_map($return_items),
             );
             if ($idempotency_reserved) {
                 $response['idempotency'] = array(
@@ -4908,7 +4945,189 @@ class MGWS_REST_API {
         return rest_ensure_response($this->format_pos_shift($closed));
     }
 
-    private function resolve_pos_shift_ident($ident) {
+    /**
+ * Elenco scontrini con sintesi, per lo storico e i report.
+ *
+ * La lista porta gia' i totali cosi' l'app non deve scaricare ogni documento
+ * per costruire il riepilogo di giornata.
+ *
+ * Receipt list with aggregates, for the history and the reports. Totals are
+ * included so the app does not need to download every document to build a
+ * daily summary.
+ */
+public function route_pos_receipt_list(WP_REST_Request $request) {
+    $business_day_id = sanitize_text_field((string) $request->get_param('business_day_id'));
+    $register_name = sanitize_text_field((string) $request->get_param('register_name'));
+    $operation_type = sanitize_key((string) $request->get_param('operation_type'));
+    $limit = (int) ($request->get_param('limit') ?: 100);
+    $offset = (int) ($request->get_param('offset') ?: 0);
+    $limit = max(1, min(500, $limit));
+    $offset = max(0, $offset);
+
+    $table = MGWS_DB::table_pos_receipts();
+    global $wpdb;
+    $where = array('1=1');
+    $params = array();
+    if ($business_day_id !== '') {
+        $where[] = 'business_day_id = %s';
+        $params[] = $business_day_id;
+    }
+    if ($register_name !== '') {
+        $where[] = 'register_name = %s';
+        $params[] = $register_name;
+    }
+    if ($operation_type !== '') {
+        $where[] = 'operation_type = %s';
+        $params[] = $operation_type;
+    }
+    $where_sql = implode(' AND ', $where);
+
+    $sql = 'SELECT * FROM ' . $table . ' WHERE ' . $where_sql
+        . ' ORDER BY id DESC LIMIT %d OFFSET %d';
+    $rows = $wpdb->get_results($wpdb->prepare($sql, array_merge($params, array($limit, $offset))), ARRAY_A);
+
+    $count_sql = 'SELECT COUNT(*) FROM ' . $table . ' WHERE ' . $where_sql;
+    $total_rows = (int) $wpdb->get_var($wpdb->prepare($count_sql, $params));
+
+    $summary_sql = 'SELECT COALESCE(SUM(total),0) AS total, COALESCE(SUM(vat_total),0) AS vat_total,'
+        . ' COALESCE(SUM(subtotal),0) AS subtotal, COALESCE(SUM(discount_total),0) AS discount_total,'
+        . ' COUNT(*) AS document_count FROM ' . $table . ' WHERE ' . $where_sql;
+    $summary = $wpdb->get_row($wpdb->prepare($summary_sql, $params), ARRAY_A);
+
+    $receipts = array();
+    if (is_array($rows)) {
+        foreach ($rows as $row) {
+            $receipts[] = $this->pos_receipt_row_to_array($row);
+        }
+    }
+
+    return rest_ensure_response(array(
+        'success' => true,
+        'receipts' => $receipts,
+        'summary' => array(
+            'total' => (float) ($summary['total'] ?? 0),
+            'vat_total' => (float) ($summary['vat_total'] ?? 0),
+            'subtotal' => (float) ($summary['subtotal'] ?? 0),
+            'discount_total' => (float) ($summary['discount_total'] ?? 0),
+            'document_count' => (int) ($summary['document_count'] ?? 0),
+        ),
+        'total_rows' => $total_rows,
+        'limit' => $limit,
+        'offset' => $offset,
+    ));
+}
+
+/**
+ * Dettaglio documento con righe e residuo rendibile.
+ *
+ * `returnable` e' calcolato dal server su tutti i resi registrati, quindi
+ * l'app non deve ricostruirlo dal proprio storico locale.
+ *
+ * Document detail with lines and the returnable remainder, computed by the
+ * server from every recorded return.
+ */
+public function route_pos_receipt_get(WP_REST_Request $request) {
+    $ident = (string) $request->get_param('receipt_ident');
+    $row = MGWS_DB::get_pos_receipt_by_key($ident);
+    if (!is_array($row)) {
+        $row = preg_match('/^[0-9]+$/', $ident) === 1
+            ? MGWS_DB::get_pos_receipt_by_id((int) $ident)
+            : null;
+    }
+    if (!is_array($row)) {
+        return new WP_Error('mgws_receipt_not_found', 'POS receipt not found', array('status' => 404));
+    }
+
+    global $wpdb;
+    $lines = $wpdb->get_results($wpdb->prepare(
+        'SELECT * FROM ' . MGWS_DB::table_pos_receipt_lines() . ' WHERE receipt_id = %d ORDER BY id ASC',
+        (int) $row['id']
+    ), ARRAY_A);
+
+    $payload = $this->pos_receipt_row_to_array($row);
+    $payload['lines'] = array();
+    if (is_array($lines)) {
+        foreach ($lines as $line) {
+            $payload['lines'][] = array(
+                'line_key' => (string) ($line['line_key'] ?? ''),
+                'movement_type' => (string) ($line['movement_type'] ?? ''),
+                'product_id' => (int) ($line['product_id'] ?? 0),
+                'variation_id' => (int) ($line['variation_id'] ?? 0),
+                'sku' => (string) ($line['sku'] ?? ''),
+                'barcode' => (string) ($line['barcode'] ?? ''),
+                'name' => (string) ($line['line_name'] ?? ''),
+                'quantity' => (int) ($line['quantity'] ?? 0),
+                'unit_price' => (float) ($line['unit_price'] ?? 0),
+                'discount_total' => (float) ($line['discount_total'] ?? 0),
+                'discount_percent' => (float) ($line['discount_percent'] ?? 0),
+                'subtotal' => (float) ($line['subtotal'] ?? 0),
+                'vat_rate' => (float) ($line['vat_rate'] ?? 0),
+                'source_sale_id' => (string) ($line['source_receipt_key'] ?? ''),
+                'source_line_key' => (string) ($line['source_line_key'] ?? ''),
+                'return_reason' => (string) ($line['return_reason'] ?? ''),
+                'return_outcome' => (string) ($line['return_outcome'] ?? ''),
+            );
+        }
+    }
+    $payload['returnable'] = MGWS_DB::get_pos_returnable_quantities((string) $row['receipt_key']);
+
+    return rest_ensure_response(array(
+        'success' => true,
+        'receipt' => $payload,
+    ));
+}
+
+private function pos_receipt_row_to_array(array $row) {
+    return array(
+        'receipt_key' => (string) ($row['receipt_key'] ?? ''),
+        'business_day_id' => (string) ($row['business_day_id'] ?? ''),
+        'register_name' => (string) ($row['register_name'] ?? ''),
+        'sequential_number' => (int) ($row['sequential_number'] ?? 0),
+        'status' => (string) ($row['status'] ?? ''),
+        'operation_type' => (string) ($row['operation_type'] ?? ''),
+        'shift_id' => (int) ($row['shift_id'] ?? 0),
+        'order_id' => (int) ($row['order_id'] ?? 0),
+        'payment_method' => (string) ($row['payment_method'] ?? ''),
+        'customer_id' => (int) ($row['customer_id'] ?? 0),
+        'customer_name' => (string) ($row['customer_name'] ?? ''),
+        'subtotal' => (float) ($row['subtotal'] ?? 0),
+        'vat_total' => (float) ($row['vat_total'] ?? 0),
+        'discount_total' => (float) ($row['discount_total'] ?? 0),
+        'total' => (float) ($row['total'] ?? 0),
+        'issued_at' => (string) ($row['issued_at_gmt'] ?? ''),
+    );
+}
+
+/**
+ * Restituisce il residuo rendibile per linea dopo i resi appena registrati.
+ *
+ * L'app usa questa mappa per non duplicare il calcolo: il server e' la fonte
+ * del residuo, perche' conosce i resi di tutti i dispositivi.
+ *
+ * Returns the returnable remainder per line after the returns just recorded,
+ * so the app does not have to recompute it.
+ */
+private function pos_returnable_map(array $return_items) {
+    $map = array();
+    $seen = array();
+    foreach ($return_items as $item) {
+        $source_key = trim((string) ($item['source_sale_id'] ?? ''));
+        $line_key = trim((string) ($item['source_line_key'] ?? ''));
+        if ($source_key === '' || $line_key === '') {
+            continue;
+        }
+        $identity = $source_key . '|' . $line_key;
+        if (isset($seen[$identity])) {
+            continue;
+        }
+        $seen[$identity] = true;
+        $remaining = MGWS_DB::get_pos_returnable_quantities($source_key);
+        $map[$identity] = (int) ($remaining[$line_key] ?? 0);
+    }
+    return $map;
+}
+
+private function resolve_pos_shift_ident($ident) {
         $ident = trim((string) $ident);
         if ($ident === '') {
             return new WP_Error('mgws_bad_request', 'Shift identifier is required', array('status' => 400));

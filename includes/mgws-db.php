@@ -720,6 +720,11 @@ class MGWS_DB {
         return $wpdb->prefix . 'mg_pos_receipts';
     }
 
+    public static function table_pos_receipt_lines() {
+        global $wpdb;
+        return $wpdb->prefix . 'mg_pos_receipt_lines';
+    }
+
     public static function table_loyalty_cards() {
         global $wpdb;
         return $wpdb->prefix . 'mg_loyalty_cards';
@@ -1869,6 +1874,15 @@ public static function issue_pos_receipt(array $row) {
     return array('row' => is_array($saved) ? $saved : array(), 'replayed' => false);
 }
 
+public static function get_pos_receipt_by_id($receipt_id) {
+    global $wpdb;
+    $row = $wpdb->get_row($wpdb->prepare(
+        'SELECT * FROM ' . self::table_pos_receipts() . ' WHERE id = %d LIMIT 1',
+        (int) $receipt_id
+    ), ARRAY_A);
+    return is_array($row) ? $row : null;
+}
+
 public static function get_pos_receipt_by_key($receipt_key) {
     global $wpdb;
     $row = $wpdb->get_row($wpdb->prepare(
@@ -1876,6 +1890,128 @@ public static function get_pos_receipt_by_key($receipt_key) {
         (string) $receipt_key
     ), ARRAY_A);
     return is_array($row) ? $row : null;
+}
+
+/**
+ * Salva le righe del documento, senza duplicarle se il documento esiste gia'.
+ *
+ * Le righe rendono il documento consultabile e permettono al server di
+ * controllare i resi: il residuo rendibile di una linea si calcola dalle
+ * righe restituite, quindi non dipende piu' dallo storico locale del
+ * dispositivo.
+ *
+ * Stores the document lines without duplicating them when the document
+ * already exists. The lines make the document readable and let the server
+ * enforce returns against real data instead of device-local history.
+ */
+public static function save_pos_receipt_lines($receipt_id, array $lines) {
+    global $wpdb;
+
+    $table = self::table_pos_receipt_lines();
+    $existing = (int) $wpdb->get_var($wpdb->prepare(
+        'SELECT COUNT(*) FROM ' . $table . ' WHERE receipt_id = %d',
+        (int) $receipt_id
+    ));
+    if ($existing > 0) {
+        return 0;
+    }
+
+    $inserted = 0;
+    foreach ($lines as $line) {
+        $ok = $wpdb->insert($table, array(
+            'receipt_id' => (int) $receipt_id,
+            'line_key' => (string) ($line['line_key'] ?? ''),
+            'movement_type' => (string) ($line['movement_type'] ?? 'sale'),
+            'product_id' => (int) ($line['product_id'] ?? 0),
+            'variation_id' => (int) ($line['variation_id'] ?? 0),
+            'sku' => (string) ($line['sku'] ?? ''),
+            'barcode' => (string) ($line['barcode'] ?? ''),
+            'line_name' => (string) ($line['name'] ?? ''),
+            'quantity' => (int) ($line['quantity'] ?? 0),
+            'unit_price' => (float) ($line['unit_price'] ?? 0),
+            'discount_total' => (float) ($line['discount_total'] ?? 0),
+            'discount_percent' => (float) ($line['discount_percent'] ?? 0),
+            'subtotal' => (float) ($line['subtotal'] ?? 0),
+            'vat_rate' => (float) ($line['vat_rate'] ?? 0),
+            'source_receipt_key' => (string) ($line['source_sale_id'] ?? ''),
+            'source_line_key' => (string) ($line['source_line_key'] ?? ''),
+            'return_reason' => (string) ($line['return_reason'] ?? ''),
+            'return_outcome' => (string) ($line['return_outcome'] ?? ''),
+            'created_at_gmt' => gmdate('Y-m-d H:i:s'),
+        ));
+        if ($ok) {
+            $inserted++;
+        }
+    }
+    return $inserted;
+}
+
+/**
+ * Restituisce le righe vendute di un documento, per il controllo dei resi.
+ * Returns the sold lines of a document, for return validation.
+ */
+public static function get_pos_receipt_sold_lines($receipt_key) {
+    global $wpdb;
+    $rows = $wpdb->get_results($wpdb->prepare(
+        'SELECT rl.* FROM ' . self::table_pos_receipt_lines() . ' rl'
+        . ' INNER JOIN ' . self::table_pos_receipts() . ' r ON r.id = rl.receipt_id'
+        . ' WHERE r.receipt_key = %s AND rl.movement_type = %s',
+        (string) $receipt_key,
+        'sale'
+    ), ARRAY_A);
+    return is_array($rows) ? $rows : array();
+}
+
+/**
+ * Quanto e' ancora rendibile su ogni riga venduta di un documento.
+ *
+ * Restituisce `line_key => quantita` per le righe con residuo, cosi' il
+ * cliente vede gli stessi numeri che il server ha calcolato. La quantita'
+ * gia' restituita e' la somma dei resi che puntano a quella riga: e il
+ * server a tenere il conto, perche' il dispositivo puo' perdersi.
+ *
+ * Returns how much is still returnable per sold line. Already-returned
+ * quantities come from the returns recorded server-side, because the device
+ * can be lost.
+ */
+public static function get_pos_returnable_quantities($receipt_key) {
+    global $wpdb;
+
+    $sold = self::get_pos_receipt_sold_lines($receipt_key);
+    if (empty($sold)) {
+        return array();
+    }
+
+    $sold_by_key = array();
+    foreach ($sold as $line) {
+        $sold_by_key[(string) $line['line_key']] = (int) $line['quantity'];
+    }
+
+    $returns = $wpdb->get_results($wpdb->prepare(
+        'SELECT rl.source_line_key, SUM(rl.quantity) AS returned_quantity FROM '
+        . self::table_pos_receipt_lines() . ' rl'
+        . ' INNER JOIN ' . self::table_pos_receipts() . ' r ON r.id = rl.receipt_id'
+        . ' WHERE rl.movement_type = %s AND rl.source_receipt_key = %s'
+        . ' GROUP BY rl.source_line_key',
+        'return',
+        (string) $receipt_key
+    ), ARRAY_A);
+
+    $returned_by_key = array();
+    if (is_array($returns)) {
+        foreach ($returns as $row) {
+            $returned_by_key[(string) $row['source_line_key']] = (int) $row['returned_quantity'];
+        }
+    }
+
+    $result = array();
+    foreach ($sold_by_key as $line_key => $quantity) {
+        $remaining = $quantity - (int) ($returned_by_key[$line_key] ?? 0);
+        if ($remaining > 0) {
+            $result[$line_key] = $remaining;
+        }
+    }
+    return $result;
 }
 
 public static function insert_pos_shift($row) {
@@ -1971,6 +2107,7 @@ public static function insert_pos_shift($row) {
         $pos_idempotency = self::table_pos_idempotency();
         $pos_shifts = self::table_pos_shifts();
         $pos_receipts = self::table_pos_receipts();
+        $pos_receipt_lines = self::table_pos_receipt_lines();
         $loyalty_cards = self::table_loyalty_cards();
         $loyalty_movements = self::table_loyalty_movements();
         $fornitori = self::table_fornitori();
@@ -2124,6 +2261,33 @@ public static function insert_pos_shift($row) {
             KEY idx_issued (issued_at_gmt),
             KEY idx_shift (shift_id),
             KEY idx_operation (operation_type)
+        ) ENGINE=InnoDB {$charset_collate};";
+
+        $sql_pos_receipt_lines = "CREATE TABLE {$pos_receipt_lines} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            receipt_id BIGINT UNSIGNED NOT NULL,
+            line_key VARCHAR(191) NOT NULL DEFAULT '',
+            movement_type VARCHAR(16) NOT NULL DEFAULT 'sale',
+            product_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            variation_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            sku VARCHAR(191) NOT NULL DEFAULT '',
+            barcode VARCHAR(191) NOT NULL DEFAULT '',
+            line_name VARCHAR(255) NOT NULL DEFAULT '',
+            quantity INT NOT NULL DEFAULT 0,
+            unit_price DECIMAL(15,4) NOT NULL DEFAULT 0,
+            discount_total DECIMAL(15,4) NOT NULL DEFAULT 0,
+            discount_percent DECIMAL(5,2) NOT NULL DEFAULT 0,
+            subtotal DECIMAL(15,4) NOT NULL DEFAULT 0,
+            vat_rate DECIMAL(5,2) NOT NULL DEFAULT 0,
+            source_receipt_key VARCHAR(191) NOT NULL DEFAULT '',
+            source_line_key VARCHAR(191) NOT NULL DEFAULT '',
+            return_reason VARCHAR(191) NOT NULL DEFAULT '',
+            return_outcome VARCHAR(32) NOT NULL DEFAULT '',
+            created_at_gmt DATETIME NOT NULL,
+            PRIMARY KEY  (id),
+            KEY idx_receipt (receipt_id),
+            KEY idx_line_key (receipt_id, line_key),
+            KEY idx_source (source_receipt_key, source_line_key)
         ) ENGINE=InnoDB {$charset_collate};";
 
         $sql_loyalty_cards = "CREATE TABLE {$loyalty_cards} (
@@ -2388,6 +2552,7 @@ public static function insert_pos_shift($row) {
         dbDelta($sql_pos_idempotency);
         dbDelta($sql_pos_shifts);
         dbDelta($sql_pos_receipts);
+        dbDelta($sql_pos_receipt_lines);
         dbDelta($sql_loyalty_cards);
         // Aggiunge la colonna "enabled" se manca dalle installazioni precedenti.
         $existingColumns = $wpdb->get_col("SHOW COLUMNS FROM {$loyalty_cards} LIKE 'enabled'");
