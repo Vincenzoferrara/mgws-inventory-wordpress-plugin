@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Warehouse Stock Manager for WooCommerce
  * Description: Multi-site and multi-warehouse stock, picking, movement ledger, purchase orders and inventory counts for WooCommerce.
- * Version: 2.3.0
+ * Version: 2.4.0
  * Author: MG
  * Text Domain: mg-warehouse-stock
  * Domain Path: /languages
@@ -17,7 +17,7 @@ if (!defined('ABSPATH')) {
 
 define('MGWS_PLUGIN_FILE', __FILE__);
 define('MGWS_PLUGIN_DIR', __DIR__);
-define('MGWS_PLUGIN_VERSION', '2.3.0');
+define('MGWS_PLUGIN_VERSION', '2.4.0');
 
 require_once MGWS_PLUGIN_DIR . '/includes/class-mgws-plugin.php';
 

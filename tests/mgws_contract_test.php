@@ -163,6 +163,11 @@ function update_post_meta(int $postId, string $key, mixed $value): bool {
 }
 
 function get_posts(array $arguments = array()): array {
+    // Il negozio finto ha una sede sola salvo diversa indicazione del test:
+    // con una sola sede vale per tutti, come nel negozio vero.
+    if (($arguments['post_type'] ?? '') === 'mg_site') {
+        return $GLOBALS['mgws_test_sites'] ?? array(900);
+    }
     if (($arguments['post_type'] ?? '') !== 'mg_warehouse') {
         return array();
     }
@@ -1423,6 +1428,14 @@ function mgws_contract_tests(MGWS_REST_API $api): array {
                 mgws_contract_assert_error($api->perm_inventory_restock_mutate(), 'mgws_forbidden', 403);
                 $GLOBALS['mgws_test_capabilities'] = array('mgws_stock_move' => true);
                 mgws_contract_assert($api->perm_inventory_restock_mutate() === true, 'mgws_stock_move must permit inventory-restock mutations');
+                // Con piu' sedi e nessuna assegnata l'inventario e' bloccato,
+                // salvo per chi gestisce le sedi e la dichiara nella richiesta.
+                $GLOBALS['mgws_test_sites'] = array(900, 901);
+                mgws_contract_assert_error($api->perm_inventory_restock_mutate(), 'mgws_site_required', 403);
+                $GLOBALS['mgws_test_capabilities'] = array('mgws_stock_move' => true, 'mgws_manage_employees' => true);
+                mgws_contract_assert($api->perm_inventory_restock_mutate() === true, 'site managers must not need an assigned site');
+                $GLOBALS['mgws_test_capabilities'] = array('mgws_stock_move' => true);
+                unset($GLOBALS['mgws_test_sites']);
                 $result = $api->route_inventory_restock_not_implemented(new WP_REST_Request());
                 mgws_contract_assert_error($result, 'mgws_not_implemented', 501);
                 $message = strtolower($result->get_error_message());

@@ -40,6 +40,7 @@ const MGWS_UNINSTALL_OPTIONS = array(
     'mgws_caps_version',
     'mgws_db_schema_version',
     'mgws_pos_turno_obbligatorio',
+    'mgws_shared_dashboards',
 );
 
 const MGWS_UNINSTALL_CAPS = array(
@@ -50,6 +51,8 @@ const MGWS_UNINSTALL_CAPS = array(
     'mgws_order_accept',
     'mgws_manage_credentials',
     'mgws_manage_user_permissions',
+    'mgws_manage_employees',
+    'mgws_reports_read',
 );
 
 const MGWS_UNINSTALL_PROBE_TEMPLATE = <<<'PROBE'
