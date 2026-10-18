@@ -79,6 +79,30 @@ class MGWS_REST_API {
             ),
         ));
 
+        register_rest_route('mgws/v1', '/me/site', array(
+            array(
+                'methods' => 'GET',
+                'permission_callback' => array($this, 'perm_logged_in'),
+                'callback' => array($this, 'route_me_site_get'),
+                'args' => $this->empty_route_args(),
+            ),
+            array(
+                'methods' => 'PUT',
+                'permission_callback' => array($this, 'perm_manage_sites'),
+                'callback' => array($this, 'route_me_site_put'),
+                'args' => array('site_id' => $this->inventory_positive_int_arg()),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/sites', array(
+            array(
+                'methods' => 'POST',
+                'permission_callback' => array($this, 'perm_manage_sites'),
+                'callback' => array($this, 'route_site_create'),
+                'args' => array('name' => $this->inventory_text_arg()),
+            ),
+        ));
+
         register_rest_route('mgws/v1', '/me/settings', array(
             array(
                 'methods' => 'GET',
@@ -90,6 +114,71 @@ class MGWS_REST_API {
                 'methods' => 'PATCH',
                 'permission_callback' => array($this, 'perm_logged_in'),
                 'callback' => array($this, 'route_me_settings_patch'),
+                'args' => $this->empty_route_args(),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/reports/catalog', array(
+            'methods' => 'GET',
+            'permission_callback' => array($this, 'perm_reports_read'),
+            'callback' => array($this, 'route_reports_catalog'),
+            'args' => $this->empty_route_args(),
+        ));
+
+        register_rest_route('mgws/v1', '/reports/query', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_reports_read'),
+            'callback' => array($this, 'route_reports_query'),
+            'args' => $this->empty_route_args(),
+        ));
+
+        register_rest_route('mgws/v1', '/dashboards', array(
+            'methods' => 'GET',
+            'permission_callback' => array($this, 'perm_logged_in'),
+            'callback' => array($this, 'route_dashboards_list'),
+            'args' => $this->empty_route_args(),
+        ));
+
+        register_rest_route('mgws/v1', '/dashboards/(?P<dashboard_id>[a-z0-9_-]{1,64})', array(
+            array(
+                'methods' => 'PUT',
+                'permission_callback' => array($this, 'perm_logged_in'),
+                'callback' => array($this, 'route_dashboard_put'),
+                'args' => $this->empty_route_args(),
+            ),
+            array(
+                'methods' => 'DELETE',
+                'permission_callback' => array($this, 'perm_logged_in'),
+                'callback' => array($this, 'route_dashboard_delete'),
+                'args' => $this->empty_route_args(),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/print/library', array(
+            'methods' => 'GET',
+            'permission_callback' => array($this, 'perm_logged_in'),
+            'callback' => array($this, 'route_print_library'),
+            'args' => $this->empty_route_args(),
+        ));
+
+        register_rest_route('mgws/v1', '/print/defaults', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_print_manage'),
+            'callback' => array($this, 'route_print_defaults'),
+            'args' => $this->empty_route_args(),
+        ));
+
+        register_rest_route('mgws/v1', '/print/(?P<collection>templates|paper-formats|categories)/(?P<item_id>[a-z0-9_-]{1,64})', array(
+            array(
+                'methods' => 'PUT',
+                'permission_callback' => array($this, 'perm_print_manage'),
+                'callback' => array($this, 'route_print_item_put'),
+                'args' => $this->empty_route_args(),
+            ),
+            array(
+                'methods' => 'DELETE',
+                'permission_callback' => array($this, 'perm_print_manage'),
+                'callback' => array($this, 'route_print_item_delete'),
                 'args' => $this->empty_route_args(),
             ),
         ));
@@ -2529,8 +2618,29 @@ class MGWS_REST_API {
         if (is_wp_error($ok)) {
             return $ok;
         }
-        if (!current_user_can('mgws_stock_move') && !current_user_can('manage_woocommerce') && !current_user_can('manage_options')) {
+        // Dipendenti e stipendi non sono roba da magazziniere: prima bastava
+        // mgws_stock_move, ora serve chi gestisce davvero il personale.
+        if (!$this->can_manage_sites()) {
             return new WP_Error('mgws_forbidden', 'Insufficient permissions', array('status' => 403));
+        }
+        return true;
+    }
+
+    /**
+     * Chi gestisce i dipendenti e gli amministratori: sono loro che creano le
+     * sedi, scelgono la propria e la assegnano agli altri.
+     */
+    private function can_manage_sites() {
+        return current_user_can('mgws_manage_employees') || current_user_can('manage_woocommerce') || current_user_can('manage_options');
+    }
+
+    public function perm_manage_sites() {
+        $ok = $this->require_logged_in();
+        if (is_wp_error($ok)) {
+            return $ok;
+        }
+        if (!$this->can_manage_sites()) {
+            return new WP_Error('mgws_forbidden', 'Only employee managers and administrators can manage sites', array('status' => 403));
         }
         return true;
     }
@@ -2553,6 +2663,11 @@ class MGWS_REST_API {
         }
         if (!current_user_can('mgws_stock_move')) {
             return new WP_Error('mgws_forbidden', 'Insufficient permissions', array('status' => 403));
+        }
+        // Senza una sede l'inventario non si usa: chi gestisce le sedi la
+        // dichiara nella richiesta, gli altri devono averne una assegnata.
+        if (!$this->can_manage_sites() && $this->effective_site_for_user(get_current_user_id()) <= 0) {
+            return new WP_Error('mgws_site_required', 'No site assigned to this user: ask an employee manager to assign one', array('status' => 403));
         }
         return true;
     }
@@ -2615,6 +2730,28 @@ class MGWS_REST_API {
             return $ok;
         }
         if (!current_user_can('mgws_stock_move') && !current_user_can('mgws_order_accept') && !current_user_can('manage_woocommerce') && !current_user_can('manage_options')) {
+            return new WP_Error('mgws_forbidden', 'Insufficient permissions', array('status' => 403));
+        }
+        return true;
+    }
+
+    public function perm_print_manage() {
+        $ok = $this->require_logged_in();
+        if (is_wp_error($ok)) {
+            return $ok;
+        }
+        if (!MGWS_Print::can_manage()) {
+            return new WP_Error('mgws_forbidden', 'Only shop managers can manage the print library', array('status' => 403));
+        }
+        return true;
+    }
+
+    public function perm_reports_read() {
+        $ok = $this->require_logged_in();
+        if (is_wp_error($ok)) {
+            return $ok;
+        }
+        if (!current_user_can('mgws_reports_read') && !current_user_can('manage_woocommerce') && !current_user_can('manage_options')) {
             return new WP_Error('mgws_forbidden', 'Insufficient permissions', array('status' => 403));
         }
         return true;
@@ -3060,6 +3197,205 @@ class MGWS_REST_API {
         return rest_ensure_response(array('ok' => true, 'user_id' => (int) $user_id, 'settings' => $settings, 'updated_at_gmt' => $now));
     }
 
+    // ---- Reports
+
+    public function route_reports_catalog(WP_REST_Request $request) {
+        return rest_ensure_response(MGWS_Reports::catalog());
+    }
+
+    public function route_reports_query(WP_REST_Request $request) {
+        $body = $this->inventory_body($request);
+        $normalized = MGWS_Reports::normalize($body);
+        if (is_wp_error($normalized)) {
+            return $normalized;
+        }
+        return rest_ensure_response(MGWS_Reports::run($normalized, !empty($body['refresh'])));
+    }
+
+    // ---- Print library (templates, categories, paper formats)
+
+    public function route_print_library(WP_REST_Request $request) {
+        return rest_ensure_response(MGWS_Print::library());
+    }
+
+    public function route_print_defaults(WP_REST_Request $request) {
+        $result = MGWS_Print::load_defaults($this->inventory_body($request));
+        return is_wp_error($result) ? $result : rest_ensure_response($result);
+    }
+
+    public function route_print_item_put(WP_REST_Request $request) {
+        $result = MGWS_Print::put(
+            (string) $request->get_param('collection'),
+            (string) $request->get_param('item_id'),
+            $this->inventory_body($request)
+        );
+        return is_wp_error($result) ? $result : rest_ensure_response($result);
+    }
+
+    public function route_print_item_delete(WP_REST_Request $request) {
+        $result = MGWS_Print::delete(
+            (string) $request->get_param('collection'),
+            (string) $request->get_param('item_id')
+        );
+        return is_wp_error($result) ? $result : rest_ensure_response($result);
+    }
+
+    // ---- Dashboards
+    //
+    // A personal dashboard lives in the owner's user meta and nobody else sees
+    // it. A shared dashboard lives in a site option and is visible either to
+    // every logged-in user (`everyone`) or only to shop managers (`admins`).
+    // Only shop managers can create, change or delete shared dashboards.
+
+    private const DASHBOARDS_SHARED_OPTION = 'mgws_shared_dashboards';
+    private const DASHBOARDS_PERSONAL_META = '_mgws_dashboards';
+    private const DASHBOARDS_MAX_PER_SCOPE = 50;
+    private const DASHBOARDS_MAX_LAYOUT_BYTES = 131072;
+
+    private function can_manage_shared_dashboards() {
+        return current_user_can('manage_options') || current_user_can('manage_woocommerce');
+    }
+
+    private function dashboards_shared() {
+        $stored = get_option(self::DASHBOARDS_SHARED_OPTION, array());
+        return is_array($stored) ? $stored : array();
+    }
+
+    private function dashboards_personal($user_id) {
+        $stored = get_user_meta($user_id, self::DASHBOARDS_PERSONAL_META, true);
+        return is_array($stored) ? $stored : array();
+    }
+
+    private function dashboard_response(array $record, $editable) {
+        return array(
+            'id' => (string) ($record['id'] ?? ''),
+            'name' => (string) ($record['name'] ?? ''),
+            'visibility' => (string) ($record['visibility'] ?? 'personal'),
+            'owner_id' => (int) ($record['owner_id'] ?? 0),
+            'layout' => is_array($record['layout'] ?? null) ? $record['layout'] : array(),
+            'updated_at_gmt' => (string) ($record['updated_at_gmt'] ?? ''),
+            'editable' => (bool) $editable,
+        );
+    }
+
+    public function route_dashboards_list(WP_REST_Request $request) {
+        $user_id = get_current_user_id();
+        $is_manager = $this->can_manage_shared_dashboards();
+        $out = array();
+        foreach ($this->dashboards_personal($user_id) as $record) {
+            if (is_array($record)) {
+                $out[] = $this->dashboard_response($record, true);
+            }
+        }
+        foreach ($this->dashboards_shared() as $record) {
+            if (!is_array($record)) {
+                continue;
+            }
+            $visibility = (string) ($record['visibility'] ?? '');
+            if ($visibility === 'admins' && !$is_manager) {
+                continue;
+            }
+            if ($visibility !== 'admins' && $visibility !== 'everyone') {
+                continue;
+            }
+            $out[] = $this->dashboard_response($record, $is_manager);
+        }
+        return rest_ensure_response(array(
+            'ok' => true,
+            'can_manage_shared' => $is_manager,
+            'dashboards' => $out,
+        ));
+    }
+
+    public function route_dashboard_put(WP_REST_Request $request) {
+        $dashboard_id = (string) $request->get_param('dashboard_id');
+        $body = $this->inventory_body($request);
+        $name = isset($body['name']) ? trim(sanitize_text_field((string) $body['name'])) : '';
+        if ($name === '') {
+            return new WP_Error('mgws_bad_request', 'name is required', array('status' => 400));
+        }
+        if (function_exists('mb_substr')) {
+            $name = mb_substr($name, 0, 80);
+        } else {
+            $name = substr($name, 0, 80);
+        }
+        $visibility = isset($body['visibility']) ? (string) $body['visibility'] : 'personal';
+        if (!in_array($visibility, array('personal', 'everyone', 'admins'), true)) {
+            return new WP_Error('mgws_bad_request', 'visibility must be personal, everyone or admins', array('status' => 400));
+        }
+        $layout = $body['layout'] ?? array();
+        if (!is_array($layout)) {
+            return new WP_Error('mgws_bad_request', 'layout must be an object', array('status' => 400));
+        }
+        $encoded = wp_json_encode($layout);
+        if (!is_string($encoded) || strlen($encoded) > self::DASHBOARDS_MAX_LAYOUT_BYTES) {
+            return new WP_Error('mgws_bad_request', 'layout payload too large', array('status' => 400));
+        }
+
+        $user_id = get_current_user_id();
+        $is_manager = $this->can_manage_shared_dashboards();
+        $shared = $this->dashboards_shared();
+        $personal = $this->dashboards_personal($user_id);
+        $is_shared_now = isset($shared[$dashboard_id]);
+
+        // A shared dashboard can be changed, or moved back to personal, only by
+        // a manager; a regular user can never touch or shadow it.
+        if (($is_shared_now || $visibility !== 'personal') && !$is_manager) {
+            return new WP_Error('mgws_forbidden', 'Only shop managers can manage shared dashboards', array('status' => 403));
+        }
+
+        $previous = $is_shared_now ? $shared[$dashboard_id] : ($personal[$dashboard_id] ?? array());
+        $record = array(
+            'id' => $dashboard_id,
+            'name' => $name,
+            'visibility' => $visibility,
+            'owner_id' => (int) (is_array($previous) && !empty($previous['owner_id']) ? $previous['owner_id'] : $user_id),
+            'layout' => $this->sanitize_settings_recursive($layout),
+            'updated_at_gmt' => gmdate('Y-m-d H:i:s'),
+        );
+
+        unset($shared[$dashboard_id], $personal[$dashboard_id]);
+        if ($visibility === 'personal') {
+            if (count($personal) >= self::DASHBOARDS_MAX_PER_SCOPE) {
+                return new WP_Error('mgws_bad_request', 'too many dashboards', array('status' => 400));
+            }
+            $personal[$dashboard_id] = $record;
+        } else {
+            if (count($shared) >= self::DASHBOARDS_MAX_PER_SCOPE) {
+                return new WP_Error('mgws_bad_request', 'too many dashboards', array('status' => 400));
+            }
+            $shared[$dashboard_id] = $record;
+        }
+        update_option(self::DASHBOARDS_SHARED_OPTION, $shared, false);
+        update_user_meta($user_id, self::DASHBOARDS_PERSONAL_META, $personal);
+
+        return rest_ensure_response(array(
+            'ok' => true,
+            'dashboard' => $this->dashboard_response($record, true),
+        ));
+    }
+
+    public function route_dashboard_delete(WP_REST_Request $request) {
+        $dashboard_id = (string) $request->get_param('dashboard_id');
+        $user_id = get_current_user_id();
+        $personal = $this->dashboards_personal($user_id);
+        if (isset($personal[$dashboard_id])) {
+            unset($personal[$dashboard_id]);
+            update_user_meta($user_id, self::DASHBOARDS_PERSONAL_META, $personal);
+            return rest_ensure_response(array('ok' => true, 'deleted' => $dashboard_id));
+        }
+        $shared = $this->dashboards_shared();
+        if (isset($shared[$dashboard_id])) {
+            if (!$this->can_manage_shared_dashboards()) {
+                return new WP_Error('mgws_forbidden', 'Only shop managers can manage shared dashboards', array('status' => 403));
+            }
+            unset($shared[$dashboard_id]);
+            update_option(self::DASHBOARDS_SHARED_OPTION, $shared, false);
+            return rest_ensure_response(array('ok' => true, 'deleted' => $dashboard_id));
+        }
+        return new WP_Error('mgws_dashboard_not_found', 'Dashboard not found', array('status' => 404));
+    }
+
     private function sanitize_settings_recursive($value) {
         if (is_array($value)) {
             $out = array();
@@ -3100,9 +3436,16 @@ class MGWS_REST_API {
         if (is_wp_error($data)) {
             return $data;
         }
+        $site_id = $this->employee_site_from_request($request, (int) ($data['wp_user_id'] ?? 0), false);
+        if (is_wp_error($site_id)) {
+            return $site_id;
+        }
         $row = MGWS_DB::insert_employee($data);
         if (!is_array($row)) {
             return new WP_Error('mgws_employee_error', 'Employee could not be created', array('status' => 500));
+        }
+        if ($site_id !== null) {
+            update_user_meta((int) $data['wp_user_id'], 'mg_default_site_id', (int) $site_id);
         }
         return rest_ensure_response($this->employee_response($row));
     }
@@ -3116,9 +3459,18 @@ class MGWS_REST_API {
         if (is_wp_error($data)) {
             return $data;
         }
+        $existing = MGWS_DB::get_employee($employee_id);
+        $wp_user_id = (int) ($data['wp_user_id'] ?? ($existing['wp_user_id'] ?? 0));
+        $site_id = $this->employee_site_from_request($request, $wp_user_id, true);
+        if (is_wp_error($site_id)) {
+            return $site_id;
+        }
         $row = MGWS_DB::update_employee($employee_id, $data);
         if (!is_array($row)) {
             return new WP_Error('mgws_employee_error', 'Employee could not be updated', array('status' => 500));
+        }
+        if ($site_id !== null && $wp_user_id > 0) {
+            update_user_meta($wp_user_id, 'mg_default_site_id', (int) $site_id);
         }
         return rest_ensure_response($this->employee_response($row));
     }
@@ -3158,7 +3510,42 @@ class MGWS_REST_API {
         if (isset($data['salary_currency']) && !preg_match('/^[A-Za-z]{3}$/', (string) $data['salary_currency'])) {
             return new WP_Error('mgws_bad_request', 'salary_currency must be an ISO-4217 code', array('status' => 400));
         }
+        if (array_key_exists('site_id', $body)) {
+            $site_id = (int) $body['site_id'];
+            if ($site_id > 0 && !$this->is_active_site($site_id)) {
+                return new WP_Error('mgws_bad_request', 'site_id is not an existing site', array('status' => 400));
+            }
+        }
         return $data;
+    }
+
+    /**
+     * Sede del dipendente: vive sul suo utente WordPress, perche' e' quello
+     * che fa login e che il backend limita. Con piu' sedi e' obbligatoria per
+     * chi ha un utente collegato; con una sola vale quella per tutti.
+     */
+    private function employee_site_from_request(WP_REST_Request $request, $wp_user_id, $partial) {
+        $body = $this->inventory_body($request);
+        $has_site = array_key_exists('site_id', $body);
+        $site_id = $has_site ? (int) $body['site_id'] : 0;
+        if ((int) $wp_user_id <= 0) {
+            return null;
+        }
+        $target = get_user_by('id', (int) $wp_user_id);
+        if ($target && user_can($target, 'manage_options') && !current_user_can('manage_options')) {
+            if ($has_site) {
+                return new WP_Error('mgws_forbidden', 'Only administrators can change the site of an administrator', array('status' => 403));
+            }
+            return null;
+        }
+        $requires_site = count($this->site_ids()) > 1;
+        if (!$partial && $requires_site && $site_id <= 0) {
+            return new WP_Error('mgws_site_required', 'site_id is required when the shop has more than one site', array('status' => 400));
+        }
+        if ($partial && $has_site && $requires_site && $site_id <= 0) {
+            return new WP_Error('mgws_site_required', 'site_id is required when the shop has more than one site', array('status' => 400));
+        }
+        return $has_site ? $site_id : null;
     }
 
     private function employee_response($row) {
@@ -3175,6 +3562,7 @@ class MGWS_REST_API {
             'salary_cents' => (int) ($row['salary_cents'] ?? 0),
             'salary_currency' => (string) ($row['salary_currency'] ?? 'EUR'),
             'notes' => (string) ($row['notes'] ?? ''),
+            'site_id' => ((int) ($row['wp_user_id'] ?? 0)) > 0 ? (int) get_user_meta((int) $row['wp_user_id'], 'mg_default_site_id', true) : 0,
             'created_at_gmt' => (string) ($row['created_at_gmt'] ?? ''),
             'updated_at_gmt' => (string) ($row['updated_at_gmt'] ?? ''),
         );
@@ -3343,7 +3731,7 @@ class MGWS_REST_API {
         global $wpdb;
         $table = MGWS_DB::table_levels();
         $enabled = (string) $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table)) === $table;
-        return rest_ensure_response(array('ok' => true, 'service' => 'inventory', 'enabled' => $enabled));
+        return rest_ensure_response(array('ok' => true, 'service' => 'inventory', 'enabled' => $enabled, 'plugin_version' => MGWS_PLUGIN_VERSION));
     }
 
     public function route_inventory_product_stock(WP_REST_Request $request) {
@@ -5922,6 +6310,8 @@ private function resolve_pos_shift_ident($ident) {
             'mgws_stock_read',
             'mgws_stock_move',
             'mgws_order_accept',
+            'mgws_manage_employees',
+            'mgws_reports_read',
         );
     }
 
@@ -5994,6 +6384,85 @@ private function resolve_pos_shift_ident($ident) {
     private function get_user_site_limit($user_id) {
         $site_id = (int) get_user_meta((int) $user_id, 'mg_default_site_id', true);
         return $site_id > 0 ? $site_id : 0;
+    }
+
+    /** Id delle sedi pubblicate, in ordine di nome. */
+    private function site_ids() {
+        $ids = get_posts(array(
+            'post_type' => 'mg_site',
+            'posts_per_page' => -1,
+            'fields' => 'ids',
+            'post_status' => 'publish',
+            'orderby' => 'title',
+            'order' => 'ASC',
+        ));
+        return is_array($ids) ? array_map('intval', $ids) : array();
+    }
+
+    private function is_active_site($site_id) {
+        return (int) $site_id > 0 && get_post_type((int) $site_id) === 'mg_site' && get_post_status((int) $site_id) === 'publish';
+    }
+
+    /**
+     * Sede in uso per un utente: quella assegnata se esiste ancora; se il
+     * negozio ha una sola sede, quella per tutti; altrimenti nessuna (0), e
+     * l'inventario resta bloccato finche' qualcuno non la assegna.
+     */
+    private function effective_site_for_user($user_id) {
+        $own = (int) get_user_meta((int) $user_id, 'mg_default_site_id', true);
+        if ($this->is_active_site($own)) {
+            return $own;
+        }
+        $ids = $this->site_ids();
+        return count($ids) === 1 ? (int) $ids[0] : 0;
+    }
+
+    private function site_summary($site_id) {
+        return array('id' => (int) $site_id, 'name' => (string) get_the_title((int) $site_id));
+    }
+
+    public function route_me_site_get(WP_REST_Request $request) {
+        $user_id = get_current_user_id();
+        $ids = $this->site_ids();
+        $site_id = $this->effective_site_for_user($user_id);
+        $can_change = $this->can_manage_sites();
+        $visible = $can_change ? $ids : ($site_id > 0 ? array($site_id) : array());
+        return rest_ensure_response(array(
+            'site_id' => $site_id,
+            'site_name' => $site_id > 0 ? (string) get_the_title($site_id) : '',
+            'sites_count' => count($ids),
+            'can_change' => $can_change,
+            'can_create' => $can_change,
+            'sites' => array_map(array($this, 'site_summary'), $visible),
+        ));
+    }
+
+    public function route_me_site_put(WP_REST_Request $request) {
+        $site_id = (int) $request->get_param('site_id');
+        if (!$this->is_active_site($site_id)) {
+            return new WP_Error('mgws_not_found', 'Site not found', array('status' => 404));
+        }
+        update_user_meta(get_current_user_id(), 'mg_default_site_id', $site_id);
+        return $this->route_me_site_get($request);
+    }
+
+    public function route_site_create(WP_REST_Request $request) {
+        $name = trim(sanitize_text_field((string) $request->get_param('name')));
+        if ($name === '') {
+            return new WP_Error('mgws_bad_request', 'name is required', array('status' => 400));
+        }
+        $site_id = wp_insert_post(array(
+            'post_type' => 'mg_site',
+            'post_status' => 'publish',
+            'post_title' => $name,
+        ), true);
+        if (is_wp_error($site_id) || (int) $site_id <= 0) {
+            return new WP_Error('mgws_site_error', 'Site could not be created', array('status' => 500));
+        }
+        // Chi crea la sede la usa subito: con una sola sede varrebbe comunque
+        // per tutti, con piu' sedi evita un secondo passaggio.
+        update_user_meta(get_current_user_id(), 'mg_default_site_id', (int) $site_id);
+        return rest_ensure_response($this->site_summary((int) $site_id));
     }
 
     /**

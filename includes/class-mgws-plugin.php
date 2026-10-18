@@ -6,6 +6,8 @@ if (!defined('ABSPATH')) {
 
 require_once __DIR__ . '/mgws-db.php';
 require_once __DIR__ . '/class-mgws-rest-api.php';
+require_once __DIR__ . '/class-mgws-reports.php';
+require_once __DIR__ . '/class-mgws-print.php';
 
 class MGWS_Plugin {
     private static $instance = null;
@@ -94,7 +96,10 @@ class MGWS_Plugin {
 
     private function maybe_upgrade_capabilities() {
         $installed = (string) get_option(self::CAPS_VERSION_OPTION, '');
-        if ($installed === (string) MGWS_PLUGIN_VERSION) {
+        // A capability added without a version bump still reaches the roles.
+        $admin = get_role('administrator');
+        $missing_caps = $admin && !$admin->has_cap('mgws_reports_read');
+        if ($installed === (string) MGWS_PLUGIN_VERSION && !$missing_caps) {
             return;
         }
         self::ensure_role_capabilities();
@@ -158,6 +163,8 @@ class MGWS_Plugin {
             'mgws_order_accept',
             'mgws_manage_credentials',
             'mgws_manage_user_permissions',
+            'mgws_manage_employees',
+            'mgws_reports_read',
         );
     }
 
@@ -168,6 +175,8 @@ class MGWS_Plugin {
             'mgws_purchase_approve',
             'mgws_supplier_manage',
             'mgws_order_accept',
+            'mgws_manage_employees',
+            'mgws_reports_read',
         );
     }
 

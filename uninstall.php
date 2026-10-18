@@ -64,7 +64,7 @@ if (!function_exists('mgws_uninstall_all')) {
             $wpdb->query("DROP TABLE IF EXISTS `{$table}`");
         }
 
-        foreach (array('mgws_caps_version', 'mgws_db_schema_version', 'mgws_pos_turno_obbligatorio') as $option) {
+        foreach (array('mgws_caps_version', 'mgws_db_schema_version', 'mgws_pos_turno_obbligatorio', 'mgws_shared_dashboards', 'mgws_print_templates', 'mgws_print_paper_formats', 'mgws_print_categories', 'mgws_print_defaults_loaded') as $option) {
             delete_option($option);
         }
 
@@ -76,6 +76,8 @@ if (!function_exists('mgws_uninstall_all')) {
             'mgws_order_accept',
             'mgws_manage_credentials',
             'mgws_manage_user_permissions',
+            'mgws_manage_employees',
+            'mgws_reports_read',
         );
 
         $roles = wp_roles();
@@ -105,6 +107,7 @@ if (!function_exists('mgws_uninstall_all')) {
         }
 
         delete_metadata('user', 0, 'mg_default_site_id', '', true);
+        delete_metadata('user', 0, '_mgws_dashboards', '', true);
 
         // The wc-mg-accepted order status is registered at runtime through
         // register_post_status and wc_order_statuses, never persisted, so

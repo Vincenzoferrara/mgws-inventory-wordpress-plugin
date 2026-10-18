@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 8.0
 Requires Plugins: woocommerce
-Stable tag: 2.3.0
+Stable tag: 2.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -78,6 +78,16 @@ The plugin exposes 34 REST endpoints under `mgws/v1` for the point of sale, loya
 4. Product variation defaults for location and purchase cost.
 
 == Changelog ==
+
+= 2.4.0 =
+* New report engine: /reports/query aggregates store receipts and online orders by measure, dimension and filters; /reports/catalog lists what can be asked.
+* New capability mgws_reports_read, given to administrators and shop managers.
+* New /dashboards routes: personal dashboards and dashboards shared with everyone or with managers only.
+* New /print routes: the shop's label, sign and report templates, their categories and paper formats, shared by every device and managed by shop managers.
+* Every user works in a site: with one site it applies to everyone, with more sites it must be assigned.
+* New routes to read and choose the site in use and to create a site.
+* New capability mgws_manage_employees: managing employees and sites no longer comes with stock movement rights.
+* The inventory status route reports the installed plugin version.
 
 = 2.3.0 =
 * First public release of the multi-site, multi-warehouse stock manager.
