@@ -1,0 +1,70 @@
+name: Release
+
+# A vX.Y.Z tag publishes the plugin: the installable zip goes to a GitHub
+# release and, once the plugin is approved on wordpress.org, to its SVN
+# repository. The tag must match the plugin version and the readme Stable tag,
+# which bin/build-release.sh already checks against each other.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the installable zip
+        id: build
+        run: |
+          bash bin/build-release.sh
+          version="${GITHUB_REF_NAME#v}"
+          archive="dist/mg-warehouse-stock-${version}.zip"
+          if [ ! -f "$archive" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match the plugin version: $(ls dist)"
+            exit 1
+          fi
+          # wordpress.org receives exactly the files of the zip.
+          unzip -q "$archive" -d dist/svn
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: ${{ steps.build.outputs.archive }}
+
+      # Secrets cannot be tested in an if: the deploy reports a skip until the
+      # wordpress.org SVN credentials are configured.
+      - name: Check wordpress.org credentials
+        id: svn
+        env:
+          SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
+          SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}
+        run: |
+          if [ -z "$SVN_USERNAME" ] || [ -z "$SVN_PASSWORD" ]; then
+            echo "::notice::Secrets SVN_USERNAME and SVN_PASSWORD are not set: wordpress.org deploy skipped."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy to wordpress.org
+        if: steps.svn.outputs.enabled == 'true'
+        uses: 10up/action-wordpress-plugin-deploy@stable
+        env:
+          SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
+          SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}
+          SLUG: ${{ vars.WPORG_SLUG || 'mg-warehouse-stock' }}
+          VERSION: ${{ steps.build.outputs.version }}
+          BUILD_DIR: dist/svn/mg-warehouse-stock
+          # Banners, icons and screenshots for the plugin page, when added.
+          ASSETS_DIR: .wordpress-org
