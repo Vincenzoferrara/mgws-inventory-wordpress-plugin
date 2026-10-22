@@ -37,4 +37,3 @@ build/
 
 # Lavoro temporaneo di debug: mai versionare
 .write_test
-tests/_tmp*

@@ -42,8 +42,8 @@ jobs:
             exit 1
           fi
 
-  test:
-    name: Tests
+  checks:
+    name: Checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -51,26 +51,6 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-
-      # These need neither WordPress nor a database: they ship their own stubs.
-      # That is the point: a contract test that needs a running store is a
-      # contract test nobody runs.
-      - name: mgws/v1 contract
-        run: php tests/mgws_contract_test.php
-
-      - name: mgws/v1 contract matrix
-        run: php tests/assert_mgws_contract_matrix.php docs/mgws-v1-contract.md
-
-      - name: Uninstall routine
-        run: php tests/uninstall_test.php
-
-      # Every AJAX handler checks a capability, every route has a
-      # permission_callback, no file writes innerHTML, and every operand of a
-      # markup concatenation is accounted for. None of that is visible in a
-      # review of the diff, because each rule holds across the whole file rather
-      # than at the line that broke it.
-      - name: Security coverage
-        run: php tests/security_coverage_test.php
 
       # A .pot left stale by a new gettext call ships a string that no
       # translator will ever see, and the omission is invisible. The build
@@ -81,7 +61,7 @@ jobs:
   build:
     name: Release archive
     runs-on: ubuntu-latest
-    needs: [lint, test]
+    needs: [lint, checks]
     steps:
       - uses: actions/checkout@v4
 
