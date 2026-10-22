@@ -1,0 +1,40 @@
+name: Bug report
+description: Something in the MGWS plugin does not work as expected.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Do **not** paste passwords, API keys, tokens, database credentials or customer data.
+        Security problems go to the [private vulnerability report](https://github.com/Vincenzoferrara/mgws-inventory-wordpress-plugin/security/advisories/new) instead.
+  - type: input
+    id: versions
+    attributes:
+      label: Plugin, WordPress, WooCommerce and PHP versions
+      placeholder: MGWS 2.4.0, WordPress 6.8, WooCommerce 10.2, PHP 8.2
+    validations:
+      required: true
+  - type: input
+    id: app
+    attributes:
+      label: MGWS Inventory app version, if involved
+      placeholder: 1.0.58 on Android
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected and what happened
+      description: Include the REST route and HTTP status if you know them (e.g. POST /mgws/v1/pos/checkout → 409).
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: debug.log or error output
+      description: Remove any personal data first.
+      render: text
