@@ -897,7 +897,7 @@ class MGWS_Plugin {
     }
 
     public function save_product_default_location($post_id, $post) {
-        if (!isset($_POST['mgws_product_save_defaults']) || !wp_verify_nonce($_POST['mgws_product_save_defaults'], 'mgws_product_save_defaults')) {
+        if (!isset($_POST['mgws_product_save_defaults']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['mgws_product_save_defaults'])), 'mgws_product_save_defaults')) {
             return;
         }
         if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
@@ -910,9 +910,9 @@ class MGWS_Plugin {
         $site_limit = $this->get_user_site_limit(get_current_user_id());
         $site_id = isset($_POST['mgws_default_site_id']) ? (int) $_POST['mgws_default_site_id'] : 0;
         $warehouse_id = isset($_POST['mgws_default_warehouse_id']) ? (int) $_POST['mgws_default_warehouse_id'] : 0;
-        $room = MGWS_DB::sanitize_loc((string) ($_POST['mgws_default_room'] ?? ''));
-        $rack = MGWS_DB::sanitize_loc((string) ($_POST['mgws_default_rack'] ?? ''));
-        $shelf = MGWS_DB::sanitize_loc((string) ($_POST['mgws_default_shelf'] ?? ''));
+        $room = MGWS_DB::sanitize_loc((string) wp_unslash($_POST['mgws_default_room'] ?? ''));
+        $rack = MGWS_DB::sanitize_loc((string) wp_unslash($_POST['mgws_default_rack'] ?? ''));
+        $shelf = MGWS_DB::sanitize_loc((string) wp_unslash($_POST['mgws_default_shelf'] ?? ''));
 
         // Enforce hierarchy: room -> rack -> shelf.
         if ($room === '') {
@@ -944,7 +944,7 @@ class MGWS_Plugin {
         update_post_meta($post_id, 'mgws_default_rack', $rack);
         update_post_meta($post_id, 'mgws_default_shelf', $shelf);
         if (isset($_POST['_purchase_cost'])) {
-            update_post_meta($post_id, '_purchase_cost', wc_format_decimal((string) $_POST['_purchase_cost'], 4));
+            update_post_meta($post_id, '_purchase_cost', wc_format_decimal(sanitize_text_field(wp_unslash($_POST['_purchase_cost'])), 4));
         }
 
         // Per-variation defaults.
@@ -957,7 +957,7 @@ class MGWS_Plugin {
                     $allowed_map[$v] = true;
                 }
 
-                foreach ($_POST['mgws_var_defaults'] as $vid_raw => $vals) {
+                foreach (wp_unslash($_POST['mgws_var_defaults']) as $vid_raw => $vals) {
                     $vid = (int) $vid_raw;
                     if ($vid <= 0 || !isset($allowed_map[$vid])) {
                         continue;
@@ -1077,7 +1077,7 @@ class MGWS_Plugin {
         if (!$this->can_accept_orders_ajax()) {
             wp_send_json_error(array('message' => __('You do not have permission to do that', 'mg-warehouse-stock')), 403);
         }
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'mgws_accept_nonce')) {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'mgws_accept_nonce')) {
             wp_send_json_error(array('message' => __('Invalid security token', 'mg-warehouse-stock')), 400);
         }
 
@@ -1218,7 +1218,7 @@ class MGWS_Plugin {
         if (!$this->can_accept_orders_ajax()) {
             wp_send_json_error(array('message' => __('You do not have permission to do that', 'mg-warehouse-stock')), 403);
         }
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'mgws_accept_nonce')) {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'mgws_accept_nonce')) {
             wp_send_json_error(array('message' => __('Invalid security token', 'mg-warehouse-stock')), 400);
         }
 
@@ -1413,7 +1413,7 @@ class MGWS_Plugin {
         if (!$this->can_read_stock_ajax()) {
             wp_send_json_error(array('message' => __('You do not have permission to do that', 'mg-warehouse-stock')), 403);
         }
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'mgws_product_nonce')) {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'mgws_product_nonce')) {
             wp_send_json_error(array('message' => __('Invalid security token', 'mg-warehouse-stock')), 400);
         }
 
@@ -1559,7 +1559,7 @@ class MGWS_Plugin {
         if (!current_user_can('manage_woocommerce')) {
             wp_send_json_error(array('message' => __('You do not have permission to do that', 'mg-warehouse-stock')), 403);
         }
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'mgws_admin_nonce')) {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'mgws_admin_nonce')) {
             wp_send_json_error(array('message' => __('Invalid security token', 'mg-warehouse-stock')), 400);
         }
 
@@ -1828,14 +1828,14 @@ class MGWS_Plugin {
         if (!current_user_can('manage_woocommerce')) {
             wp_send_json_error(array('message' => __('You do not have permission to do that', 'mg-warehouse-stock')), 403);
         }
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'mgws_admin_nonce')) {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'mgws_admin_nonce')) {
             wp_send_json_error(array('message' => __('Invalid security token', 'mg-warehouse-stock')), 400);
         }
     }
 
     private function require_ajax_nonce_any($nonces) {
         $nonces = is_array($nonces) ? $nonces : array();
-        $val = isset($_POST['nonce']) ? (string) $_POST['nonce'] : '';
+        $val = isset($_POST['nonce']) ? sanitize_text_field(wp_unslash($_POST['nonce'])) : '';
         if ($val === '') {
             wp_send_json_error(array('message' => __('Invalid security token', 'mg-warehouse-stock')), 400);
         }
@@ -1852,7 +1852,7 @@ class MGWS_Plugin {
         if (!current_user_can('manage_options')) {
             wp_send_json_error(array('message' => __('You do not have permission to do that', 'mg-warehouse-stock')), 403);
         }
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'mgws_admin_nonce')) {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'mgws_admin_nonce')) {
             wp_send_json_error(array('message' => __('Invalid security token', 'mg-warehouse-stock')), 400);
         }
     }
@@ -1885,10 +1885,10 @@ class MGWS_Plugin {
         $this->require_admin_nonce();
 
         $warehouse_id = isset($_POST['warehouse_id']) ? (int) $_POST['warehouse_id'] : 0;
-        $room = MGWS_DB::sanitize_loc((string) ($_POST['room'] ?? ''));
-        $rack = MGWS_DB::sanitize_loc((string) ($_POST['rack'] ?? ''));
-        $shelf = MGWS_DB::sanitize_loc((string) ($_POST['shelf'] ?? ''));
-        $scope = sanitize_key((string) ($_POST['scope'] ?? ''));
+        $room = MGWS_DB::sanitize_loc((string) wp_unslash($_POST['room'] ?? ''));
+        $rack = MGWS_DB::sanitize_loc((string) wp_unslash($_POST['rack'] ?? ''));
+        $shelf = MGWS_DB::sanitize_loc((string) wp_unslash($_POST['shelf'] ?? ''));
+        $scope = sanitize_key((string) wp_unslash($_POST['scope'] ?? ''));
         if ($warehouse_id <= 0 || $room === '' || $scope === '') {
             wp_send_json_error(array('message' => __('Missing data', 'mg-warehouse-stock')), 400);
         }
@@ -1921,10 +1921,10 @@ class MGWS_Plugin {
         $this->require_admin_nonce();
 
         $warehouse_id = isset($_POST['warehouse_id']) ? (int) $_POST['warehouse_id'] : 0;
-        $room = MGWS_DB::sanitize_loc((string) ($_POST['room'] ?? ''));
-        $rack = MGWS_DB::sanitize_loc((string) ($_POST['rack'] ?? ''));
-        $shelf = MGWS_DB::sanitize_loc((string) ($_POST['shelf'] ?? ''));
-        $scope = sanitize_key((string) ($_POST['scope'] ?? ''));
+        $room = MGWS_DB::sanitize_loc((string) wp_unslash($_POST['room'] ?? ''));
+        $rack = MGWS_DB::sanitize_loc((string) wp_unslash($_POST['rack'] ?? ''));
+        $shelf = MGWS_DB::sanitize_loc((string) wp_unslash($_POST['shelf'] ?? ''));
+        $scope = sanitize_key((string) wp_unslash($_POST['scope'] ?? ''));
         if ($warehouse_id <= 0 || $room === '' || $scope === '') {
             wp_send_json_error(array('message' => __('Missing data', 'mg-warehouse-stock')), 400);
         }
@@ -2032,7 +2032,7 @@ class MGWS_Plugin {
         if (!$this->can_move_stock_ajax()) {
             wp_send_json_error(array('message' => __('You do not have permission to do that', 'mg-warehouse-stock')), 403);
         }
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'mgws_product_nonce')) {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'mgws_product_nonce')) {
             wp_send_json_error(array('message' => __('Invalid security token', 'mg-warehouse-stock')), 400);
         }
 
@@ -2168,7 +2168,7 @@ class MGWS_Plugin {
     }
 
     public function save_warehouse_metabox($post_id, $post) {
-        if (!isset($_POST['mgws_wh_site_nonce']) || !wp_verify_nonce($_POST['mgws_wh_site_nonce'], 'mgws_wh_site_nonce')) {
+        if (!isset($_POST['mgws_wh_site_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['mgws_wh_site_nonce'])), 'mgws_wh_site_nonce')) {
             return;
         }
         if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {

@@ -68,7 +68,9 @@ WordPress runs the uninstall routine, which removes all 18 of its tables, its op
 
 = Is there a mobile app? =
 
-The plugin exposes 34 REST endpoints under `mgws/v1` for the point of sale, loyalty cards, stock lookups, purchasing and counts, plus 5 short-form endpoints under `mgws`. It is built for a companion mobile or handheld front end.
+Yes: [MGWS Inventory](https://github.com/Vincenzoferrara/mgws-inventory), a free and open source app (GPL-3.0) for Android, Windows and Linux. With WooCommerce alone it manages products, orders, coupons, customers and the dashboard; with this plugin installed it also unlocks the point of sale, inventory, suppliers, loyalty cards, employees, print templates and custom reports.
+
+The plugin exposes 34 REST endpoints under `mgws/v1` for the point of sale, loyalty cards, stock lookups, purchasing and counts, plus 5 short-form endpoints under `mgws`, so other front ends can use it too.
 
 == Screenshots ==
 

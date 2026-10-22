@@ -2881,7 +2881,7 @@ public static function insert_pos_shift($row) {
     }
 
     public static function sanitize_loc($value) {
-        $value = trim($value);
+        $value = sanitize_text_field((string) $value);
         if (strlen($value) > 80) {
             $value = substr($value, 0, 80);
         }
