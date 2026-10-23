@@ -709,7 +709,7 @@ class MGWS_REST_API {
             $site_id = (int) $site_id;
             return array(
                 'id' => $site_id,
-                'name' => function_exists('get_the_title') ? (string) get_the_title($site_id) : (__('Site', 'mg-warehouse-stock') . ' ' . $site_id),
+                'name' => function_exists('get_the_title') ? $this->plain_title($site_id) : (__('Site', 'mg-warehouse-stock') . ' ' . $site_id),
                 'active' => true,
             );
         }, is_array($ids) ? $ids : array()));
@@ -734,7 +734,7 @@ class MGWS_REST_API {
             return array(
                 'id' => $warehouse_id,
                 'site_id' => (int) get_post_meta($warehouse_id, 'mg_site_id', true),
-                'name' => function_exists('get_the_title') ? (string) get_the_title($warehouse_id) : (__('Warehouse', 'mg-warehouse-stock') . ' ' . $warehouse_id),
+                'name' => function_exists('get_the_title') ? $this->plain_title($warehouse_id) : (__('Warehouse', 'mg-warehouse-stock') . ' ' . $warehouse_id),
                 'active' => true,
             );
         }, is_array($ids) ? $ids : array()));
@@ -6417,8 +6417,19 @@ private function resolve_pos_shift_ident($ident) {
         return count($ids) === 1 ? (int) $ids[0] : 0;
     }
 
+    /**
+     * Titolo di un post come testo semplice.
+     *
+     * get_the_title() passa da wptexturize e restituisce HTML ("&#8211;" al
+     * posto del trattino): l'app lo mostrerebbe cosi' com'e', perche' non e'
+     * una pagina web.
+     */
+    private function plain_title($post_id) {
+        return html_entity_decode((string) get_the_title((int) $post_id), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    }
+
     private function site_summary($site_id) {
-        return array('id' => (int) $site_id, 'name' => (string) get_the_title((int) $site_id));
+        return array('id' => (int) $site_id, 'name' => $this->plain_title((int) $site_id));
     }
 
     public function route_me_site_get(WP_REST_Request $request) {
@@ -6429,7 +6440,7 @@ private function resolve_pos_shift_ident($ident) {
         $visible = $can_change ? $ids : ($site_id > 0 ? array($site_id) : array());
         return rest_ensure_response(array(
             'site_id' => $site_id,
-            'site_name' => $site_id > 0 ? (string) get_the_title($site_id) : '',
+            'site_name' => $site_id > 0 ? $this->plain_title($site_id) : '',
             'sites_count' => count($ids),
             'can_change' => $can_change,
             'can_create' => $can_change,
