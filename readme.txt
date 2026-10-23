@@ -90,6 +90,7 @@ The plugin exposes 34 REST endpoints under `mgws/v1` for the point of sale, loya
 * New routes to read and choose the site in use and to create a site.
 * New capability mgws_manage_employees: managing employees and sites no longer comes with stock movement rights.
 * The inventory status route reports the installed plugin version.
+* The loyalty stats route also reports the total points ever issued and how many cards are in each tier.
 
 = 2.3.0 =
 * First public release of the multi-site, multi-warehouse stock manager.

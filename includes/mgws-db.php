@@ -1634,10 +1634,24 @@ class MGWS_DB {
     public static function get_loyalty_stats() {
         global $wpdb;
         $cards = self::table_loyalty_cards();
+        $movements = self::table_loyalty_movements();
+
+        // Every known tier is always present, so clients can read a count without checking for it.
+        $tier_distribution = array('bronze' => 0, 'silver' => 0, 'gold' => 0, 'platinum' => 0);
+        $tier_rows = $wpdb->get_results("SELECT tier, COUNT(*) AS total FROM {$cards} GROUP BY tier", ARRAY_A);
+        foreach ((array) $tier_rows as $row) {
+            $tier = sanitize_key((string) $row['tier']);
+            if ($tier !== '') {
+                $tier_distribution[$tier] = (int) $row['total'];
+            }
+        }
+
         return array(
             'customers' => (int) $wpdb->get_var("SELECT COUNT(*) FROM {$cards}"),
             'cards' => (int) $wpdb->get_var("SELECT COUNT(*) FROM {$cards} WHERE card_number IS NOT NULL AND card_number <> ''"),
             'points' => (int) $wpdb->get_var("SELECT COALESCE(SUM(points_balance), 0) FROM {$cards}"),
+            'total_points_issued' => (int) $wpdb->get_var("SELECT COALESCE(SUM(points_delta), 0) FROM {$movements} WHERE points_delta > 0"),
+            'tier_distribution' => $tier_distribution,
         );
     }
 
