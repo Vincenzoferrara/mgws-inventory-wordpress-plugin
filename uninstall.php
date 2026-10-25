@@ -61,7 +61,7 @@ if (!function_exists('mgws_uninstall_all')) {
         );
 
         foreach ($tables as $table) {
-            $wpdb->query("DROP TABLE IF EXISTS `{$table}`");
+            $wpdb->query($wpdb->prepare('DROP TABLE IF EXISTS %i', $table)); // phpcs:ignore WordPress.DB.DirectDatabaseQuery -- uninstall drops the plugin's own tables; there is nothing to cache.
         }
 
         foreach (array('mgws_caps_version', 'mgws_db_schema_version', 'mgws_pos_turno_obbligatorio', 'mgws_shared_dashboards', 'mgws_print_templates', 'mgws_print_paper_formats', 'mgws_print_categories', 'mgws_print_defaults_loaded') as $option) {

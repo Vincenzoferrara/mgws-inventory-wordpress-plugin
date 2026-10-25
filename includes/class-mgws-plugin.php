@@ -469,7 +469,8 @@ class MGWS_Plugin {
         } elseif (is_object($post_or_order) && method_exists($post_or_order, 'get_id')) {
             $order_id = (int) $post_or_order->get_id();
         } else {
-            $order_id = isset($_GET['id']) ? absint((string) wp_unslash($_GET['id'])) : 0;
+            // Read-only: the order id of the HPOS edit screen being rendered.
+            $order_id = isset($_GET['id']) ? absint((string) wp_unslash($_GET['id'])) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
         }
 
         if ($order_id <= 0) {
@@ -906,9 +907,9 @@ class MGWS_Plugin {
         $site_limit = $this->get_user_site_limit(get_current_user_id());
         $site_id = isset($_POST['mgws_default_site_id']) ? (int) $_POST['mgws_default_site_id'] : 0;
         $warehouse_id = isset($_POST['mgws_default_warehouse_id']) ? (int) $_POST['mgws_default_warehouse_id'] : 0;
-        $room = MGWS_DB::sanitize_loc((string) wp_unslash($_POST['mgws_default_room'] ?? ''));
-        $rack = MGWS_DB::sanitize_loc((string) wp_unslash($_POST['mgws_default_rack'] ?? ''));
-        $shelf = MGWS_DB::sanitize_loc((string) wp_unslash($_POST['mgws_default_shelf'] ?? ''));
+        $room = MGWS_DB::sanitize_loc(sanitize_text_field(wp_unslash($_POST['mgws_default_room'] ?? '')));
+        $rack = MGWS_DB::sanitize_loc(sanitize_text_field(wp_unslash($_POST['mgws_default_rack'] ?? '')));
+        $shelf = MGWS_DB::sanitize_loc(sanitize_text_field(wp_unslash($_POST['mgws_default_shelf'] ?? '')));
 
         // Enforce hierarchy: room -> rack -> shelf.
         if ($room === '') {
@@ -953,7 +954,8 @@ class MGWS_Plugin {
                     $allowed_map[$v] = true;
                 }
 
-                foreach (wp_unslash($_POST['mgws_var_defaults']) as $vid_raw => $vals) {
+                // Each value is cast or passed through sanitize_loc() below.
+                foreach (wp_unslash($_POST['mgws_var_defaults']) as $vid_raw => $vals) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
                     $vid = (int) $vid_raw;
                     if ($vid <= 0 || !isset($allowed_map[$vid])) {
                         continue;
@@ -1229,7 +1231,8 @@ class MGWS_Plugin {
             wp_send_json_error(array('message' => __('Order already accepted', 'mg-warehouse-stock')), 409);
         }
 
-        $payload = isset($_POST['payload']) ? wp_unslash($_POST['payload']) : '';
+        // JSON document: sanitizing it as text would corrupt it. Every decoded field is validated below.
+        $payload = isset($_POST['payload']) ? wp_unslash($_POST['payload']) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
         $data = json_decode($payload, true);
         if (!is_array($data)) {
             wp_send_json_error(array('message' => __('Invalid payload', 'mg-warehouse-stock')), 400);
@@ -1454,6 +1457,7 @@ class MGWS_Plugin {
             wp_send_json_error(array('message' => __('You do not have permission to do that', 'mg-warehouse-stock')), 403);
         }
         $this->require_ajax_nonce_any(array('mgws_product_nonce', 'mgws_admin_nonce'));
+        // phpcs:disable WordPress.Security.NonceVerification.Missing -- the nonce was just verified by require_ajax_nonce_any(), which exits on failure.
 
         $site_id = isset($_POST['site_id']) ? (int) $_POST['site_id'] : 0;
         $site_limit = $this->get_user_site_limit(get_current_user_id());
@@ -1470,6 +1474,7 @@ class MGWS_Plugin {
             $out[] = array('id' => (int) $w->ID, 'name' => $w->post_title, 'site_id' => $site_id);
         }
         wp_send_json_success(array('warehouses' => $out));
+        // phpcs:enable WordPress.Security.NonceVerification.Missing
     }
 
     public function ajax_get_location_suggestions() {
@@ -1477,6 +1482,7 @@ class MGWS_Plugin {
             wp_send_json_error(array('message' => __('You do not have permission to do that', 'mg-warehouse-stock')), 403);
         }
         $this->require_ajax_nonce_any(array('mgws_product_nonce', 'mgws_admin_nonce'));
+        // phpcs:disable WordPress.Security.NonceVerification.Missing -- the nonce was just verified by require_ajax_nonce_any(), which exits on failure.
 
         $warehouse_id = isset($_POST['warehouse_id']) ? (int) $_POST['warehouse_id'] : 0;
         $site_limit = $this->get_user_site_limit(get_current_user_id());
@@ -1490,6 +1496,7 @@ class MGWS_Plugin {
 
         $suggest = MGWS_DB::get_location_suggestions_for_warehouse($warehouse_id);
         wp_send_json_success($suggest);
+        // phpcs:enable WordPress.Security.NonceVerification.Missing
     }
 
     public function ajax_create_site() {
@@ -1497,6 +1504,7 @@ class MGWS_Plugin {
             wp_send_json_error(array('message' => __('You do not have permission to do that', 'mg-warehouse-stock')), 403);
         }
         $this->require_ajax_nonce_any(array('mgws_product_nonce', 'mgws_admin_nonce'));
+        // phpcs:disable WordPress.Security.NonceVerification.Missing -- the nonce was just verified by require_ajax_nonce_any(), which exits on failure.
 
         $site_limit = $this->get_user_site_limit(get_current_user_id());
         if ($site_limit > 0) {
@@ -1519,6 +1527,7 @@ class MGWS_Plugin {
         }
 
         wp_send_json_success(array('site' => array('id' => (int) $id, 'name' => $name)));
+        // phpcs:enable WordPress.Security.NonceVerification.Missing
     }
 
     public function ajax_create_warehouse() {
@@ -1526,6 +1535,7 @@ class MGWS_Plugin {
             wp_send_json_error(array('message' => __('You do not have permission to do that', 'mg-warehouse-stock')), 403);
         }
         $this->require_ajax_nonce_any(array('mgws_product_nonce', 'mgws_admin_nonce'));
+        // phpcs:disable WordPress.Security.NonceVerification.Missing -- the nonce was just verified by require_ajax_nonce_any(), which exits on failure.
 
         $site_id = isset($_POST['site_id']) ? (int) $_POST['site_id'] : 0;
         $name = isset($_POST['name']) ? sanitize_text_field(wp_unslash($_POST['name'])) : '';
@@ -1550,6 +1560,7 @@ class MGWS_Plugin {
         update_post_meta((int) $id, 'mg_site_id', $site_id);
 
         wp_send_json_success(array('warehouse' => array('id' => (int) $id, 'name' => $name, 'site_id' => $site_id)));
+        // phpcs:enable WordPress.Security.NonceVerification.Missing
     }
 
     public function ajax_admin_get_tree() {
@@ -1615,6 +1626,7 @@ class MGWS_Plugin {
             wp_send_json_error(array('message' => __('You do not have permission to do that', 'mg-warehouse-stock')), 403);
         }
         $this->require_ajax_nonce_any(array('mgws_product_nonce', 'mgws_admin_nonce'));
+        // phpcs:disable WordPress.Security.NonceVerification.Missing -- the nonce was just verified by require_ajax_nonce_any(), which exits on failure.
 
         $warehouse_id = isset($_POST['warehouse_id']) ? (int) $_POST['warehouse_id'] : 0;
         $site_id = isset($_POST['site_id']) ? (int) $_POST['site_id'] : 0;
@@ -1727,6 +1739,7 @@ class MGWS_Plugin {
         }
         $suggest = $wid_for_suggest > 0 ? MGWS_DB::get_location_suggestions_for_warehouse($wid_for_suggest) : array('rooms' => array(), 'racks' => array(), 'shelves' => array(), 'racks_by_room' => array(), 'shelves_by_room_rack' => array(), 'tree' => array('rooms' => array()));
         wp_send_json_success($suggest);
+        // phpcs:enable WordPress.Security.NonceVerification.Missing
     }
 
     public function ajax_delete_location_value() {
@@ -1734,6 +1747,7 @@ class MGWS_Plugin {
             wp_send_json_error(array('message' => __('You do not have permission to do that', 'mg-warehouse-stock')), 403);
         }
         $this->require_ajax_nonce_any(array('mgws_product_nonce', 'mgws_admin_nonce'));
+        // phpcs:disable WordPress.Security.NonceVerification.Missing -- the nonce was just verified by require_ajax_nonce_any(), which exits on failure.
 
         $warehouse_id = isset($_POST['warehouse_id']) ? (int) $_POST['warehouse_id'] : 0;
         $site_id = isset($_POST['site_id']) ? (int) $_POST['site_id'] : 0;
@@ -1821,6 +1835,7 @@ class MGWS_Plugin {
             ? MGWS_DB::get_location_suggestions_for_warehouse($wid_for_suggest)
             : array('rooms' => array(), 'racks' => array(), 'shelves' => array(), 'racks_by_room' => array(), 'shelves_by_room_rack' => array(), 'tree' => array('rooms' => array()));
         wp_send_json_success($suggest);
+        // phpcs:enable WordPress.Security.NonceVerification.Missing
     }
 
     private function require_admin_nonce() {
@@ -1882,11 +1897,12 @@ class MGWS_Plugin {
 
     public function ajax_link_warehouse_location() {
         $this->require_admin_nonce();
+        // phpcs:disable WordPress.Security.NonceVerification.Missing -- the nonce was just verified by require_admin_nonce(), which exits on failure.
 
         $warehouse_id = isset($_POST['warehouse_id']) ? (int) $_POST['warehouse_id'] : 0;
-        $room = MGWS_DB::sanitize_loc((string) wp_unslash($_POST['room'] ?? ''));
-        $rack = MGWS_DB::sanitize_loc((string) wp_unslash($_POST['rack'] ?? ''));
-        $shelf = MGWS_DB::sanitize_loc((string) wp_unslash($_POST['shelf'] ?? ''));
+        $room = MGWS_DB::sanitize_loc(sanitize_text_field(wp_unslash($_POST['room'] ?? '')));
+        $rack = MGWS_DB::sanitize_loc(sanitize_text_field(wp_unslash($_POST['rack'] ?? '')));
+        $shelf = MGWS_DB::sanitize_loc(sanitize_text_field(wp_unslash($_POST['shelf'] ?? '')));
         $scope = sanitize_key((string) wp_unslash($_POST['scope'] ?? ''));
         if ($warehouse_id <= 0 || $room === '' || $scope === '') {
             wp_send_json_error(array('message' => __('Missing data', 'mg-warehouse-stock')), 400);
@@ -1914,15 +1930,17 @@ class MGWS_Plugin {
             wp_send_json_error(array('message' => $res['message'] ?? __('Error', 'mg-warehouse-stock')), 400);
         }
         wp_send_json_success(array('wh_tree' => MGWS_DB::get_warehouse_location_tree($warehouse_id)));
+        // phpcs:enable WordPress.Security.NonceVerification.Missing
     }
 
     public function ajax_unlink_warehouse_location() {
         $this->require_admin_nonce();
+        // phpcs:disable WordPress.Security.NonceVerification.Missing -- the nonce was just verified by require_admin_nonce(), which exits on failure.
 
         $warehouse_id = isset($_POST['warehouse_id']) ? (int) $_POST['warehouse_id'] : 0;
-        $room = MGWS_DB::sanitize_loc((string) wp_unslash($_POST['room'] ?? ''));
-        $rack = MGWS_DB::sanitize_loc((string) wp_unslash($_POST['rack'] ?? ''));
-        $shelf = MGWS_DB::sanitize_loc((string) wp_unslash($_POST['shelf'] ?? ''));
+        $room = MGWS_DB::sanitize_loc(sanitize_text_field(wp_unslash($_POST['room'] ?? '')));
+        $rack = MGWS_DB::sanitize_loc(sanitize_text_field(wp_unslash($_POST['rack'] ?? '')));
+        $shelf = MGWS_DB::sanitize_loc(sanitize_text_field(wp_unslash($_POST['shelf'] ?? '')));
         $scope = sanitize_key((string) wp_unslash($_POST['scope'] ?? ''));
         if ($warehouse_id <= 0 || $room === '' || $scope === '') {
             wp_send_json_error(array('message' => __('Missing data', 'mg-warehouse-stock')), 400);
@@ -1939,10 +1957,12 @@ class MGWS_Plugin {
             wp_send_json_error(array('message' => $res['message'] ?? __('Error', 'mg-warehouse-stock')), 400);
         }
         wp_send_json_success(array('wh_tree' => MGWS_DB::get_warehouse_location_tree($warehouse_id)));
+        // phpcs:enable WordPress.Security.NonceVerification.Missing
     }
 
     public function ajax_delete_warehouse() {
         $this->require_admin_delete_caps();
+        // phpcs:disable WordPress.Security.NonceVerification.Missing -- the nonce was just verified by require_admin_delete_caps(), which exits on failure.
 
         $warehouse_id = isset($_POST['warehouse_id']) ? (int) $_POST['warehouse_id'] : 0;
         if ($warehouse_id <= 0) {
@@ -1974,10 +1994,12 @@ class MGWS_Plugin {
             wp_send_json_error(array('message' => __('Could not delete the warehouse', 'mg-warehouse-stock')), 500);
         }
         wp_send_json_success(array('ok' => true));
+        // phpcs:enable WordPress.Security.NonceVerification.Missing
     }
 
     public function ajax_delete_site() {
         $this->require_admin_delete_caps();
+        // phpcs:disable WordPress.Security.NonceVerification.Missing -- the nonce was just verified by require_admin_delete_caps(), which exits on failure.
 
         $site_id = isset($_POST['site_id']) ? (int) $_POST['site_id'] : 0;
         if ($site_id <= 0) {
@@ -2027,6 +2049,7 @@ class MGWS_Plugin {
             wp_send_json_error(array('message' => __('Could not delete the site', 'mg-warehouse-stock')), 500);
         }
         wp_send_json_success(array('ok' => true));
+        // phpcs:enable WordPress.Security.NonceVerification.Missing
     }
 
     public function ajax_apply_inventory_op() {
@@ -2038,19 +2061,19 @@ class MGWS_Plugin {
         }
 
         $operation = isset($_POST['operation']) ? sanitize_key(wp_unslash($_POST['operation'])) : 'adjust';
-        $warehouse_id = (int) ($_POST['warehouse_id'] ?? 0);
-        $to_warehouse_id = (int) ($_POST['to_warehouse_id'] ?? 0);
-        $product_id = (int) ($_POST['product_id'] ?? 0);
-        $variation_id = (int) ($_POST['variation_id'] ?? 0);
-        $qty = (int) ($_POST['qty'] ?? 0);
+        $warehouse_id = isset($_POST['warehouse_id']) ? (int) $_POST['warehouse_id'] : 0;
+        $to_warehouse_id = isset($_POST['to_warehouse_id']) ? (int) $_POST['to_warehouse_id'] : 0;
+        $product_id = isset($_POST['product_id']) ? (int) $_POST['product_id'] : 0;
+        $variation_id = isset($_POST['variation_id']) ? (int) $_POST['variation_id'] : 0;
+        $qty = isset($_POST['qty']) ? (int) $_POST['qty'] : 0;
 
-        $room = MGWS_DB::sanitize_loc((string) wp_unslash($_POST['room'] ?? ''));
-        $rack = MGWS_DB::sanitize_loc((string) wp_unslash($_POST['rack'] ?? ''));
-        $shelf = MGWS_DB::sanitize_loc((string) wp_unslash($_POST['shelf'] ?? ''));
+        $room = MGWS_DB::sanitize_loc(sanitize_text_field(wp_unslash($_POST['room'] ?? '')));
+        $rack = MGWS_DB::sanitize_loc(sanitize_text_field(wp_unslash($_POST['rack'] ?? '')));
+        $shelf = MGWS_DB::sanitize_loc(sanitize_text_field(wp_unslash($_POST['shelf'] ?? '')));
 
-        $to_room = MGWS_DB::sanitize_loc((string) wp_unslash($_POST['to_room'] ?? ''));
-        $to_rack = MGWS_DB::sanitize_loc((string) wp_unslash($_POST['to_rack'] ?? ''));
-        $to_shelf = MGWS_DB::sanitize_loc((string) wp_unslash($_POST['to_shelf'] ?? ''));
+        $to_room = MGWS_DB::sanitize_loc(sanitize_text_field(wp_unslash($_POST['to_room'] ?? '')));
+        $to_rack = MGWS_DB::sanitize_loc(sanitize_text_field(wp_unslash($_POST['to_rack'] ?? '')));
+        $to_shelf = MGWS_DB::sanitize_loc(sanitize_text_field(wp_unslash($_POST['to_shelf'] ?? '')));
 
         $item_ok = $this->validate_item_for_stock_ops($product_id, $variation_id);
         if (is_wp_error($item_ok)) {
@@ -2206,8 +2229,12 @@ class MGWS_Plugin {
 
     public function save_user_site_field($user_id) {
         $can_site = $this->can_edit_user_site($user_id);
+        // This runs on personal_options_update / edit_user_profile_update, which core fires only after
+        // check_admin_referer('update-user_' . $user_id) in wp-admin/user-edit.php.
+        // phpcs:disable WordPress.Security.NonceVerification.Missing
         if ($can_site && isset($_POST['mg_default_site_id'])) {
             $new_site = (int) $_POST['mg_default_site_id'];
+            // phpcs:enable WordPress.Security.NonceVerification.Missing
             if (!current_user_can('manage_options')) {
                 $my_site = (int) get_user_meta(get_current_user_id(), 'mg_default_site_id', true);
                 if ($my_site <= 0) {
