@@ -27,8 +27,13 @@ require_once MGWS_PLUGIN_DIR . '/includes/mgws-db.php';
 
 if (!function_exists('mgws_uninstall_all')) {
     /**
-     * Removes every trace of the plugin: tables, options, capabilities,
-     * custom post types, user meta and rewrite rules.
+     * Removes the plugin's tables, options, capabilities, custom post types,
+     * user meta and rewrite rules.
+     *
+     * The POS documents stay: mg_pos_receipts, mg_pos_receipt_lines and
+     * mg_pos_closings hold receipts and shift closings, which are fiscal
+     * records the shop must keep even after the plugin is gone. They are left
+     * out of $tables on purpose.
      *
      * The order matters. Warehouses reference sites, so they are deleted first.
      * Capabilities are removed from the roles that hold them, so a capability

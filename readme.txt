@@ -64,7 +64,9 @@ Yes, and that is the default. The plugin only takes over WooCommerce's stock red
 
 = What happens when I delete the plugin? =
 
-WordPress runs the uninstall routine, which removes all 18 of its tables, its options, its custom post types, its user meta and its capabilities. Your products and orders are untouched. This is destructive and cannot be undone, so export anything you want to keep first.
+WordPress runs the uninstall routine, which removes 18 of its tables, its options, its custom post types, its user meta and its capabilities. Your products and orders are untouched. This is destructive and cannot be undone, so export anything you want to keep first.
+
+The point of sale documents are kept on purpose: the tables mg_pos_receipts, mg_pos_receipt_lines and mg_pos_closings hold receipts and shift closings, which are fiscal records a shop must keep. Drop them yourself if you no longer need them.
 
 = Is there a mobile app? =
 
