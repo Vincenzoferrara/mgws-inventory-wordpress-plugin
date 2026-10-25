@@ -3104,13 +3104,17 @@ class MGWS_REST_API {
             return new WP_Error('mgws_forbidden', 'Site outside allowed scope', array('status' => 403));
         }
         $site_id = $site_id > 0 ? $site_id : $site_limit;
-        $sql = 'SELECT site_id, warehouse_id, product_id, variation_id, qty, room, rack, shelf FROM ' . MGWS_DB::table_levels() . ' WHERE 1=1';
-        $params = array();
-        if ($site_id > 0) { $sql .= ' AND site_id=%d'; $params[] = $site_id; }
-        if ($warehouse_id > 0) { $sql .= ' AND warehouse_id=%d'; $params[] = $warehouse_id; }
-        $sql .= ' ORDER BY product_id ASC, variation_id ASC, site_id ASC, warehouse_id ASC, room ASC, rack ASC, shelf ASC';
-        $query = empty($params) ? $sql : $wpdb->prepare($sql, $params);
-        $rows = $wpdb->get_results($query, ARRAY_A);
+        // An id of 0 means "any", so its filter switches itself off.
+        $rows = $wpdb->get_results($wpdb->prepare(
+            'SELECT site_id, warehouse_id, product_id, variation_id, qty, room, rack, shelf FROM %i'
+            . ' WHERE (%d = 0 OR site_id=%d) AND (%d = 0 OR warehouse_id=%d)'
+            . ' ORDER BY product_id ASC, variation_id ASC, site_id ASC, warehouse_id ASC, room ASC, rack ASC, shelf ASC',
+            MGWS_DB::table_levels(),
+            $site_id,
+            $site_id,
+            $warehouse_id,
+            $warehouse_id
+        ), ARRAY_A);
         return is_array($rows) ? $rows : array();
     }
 
@@ -5079,11 +5083,12 @@ class MGWS_REST_API {
                 if ($step['kind'] === 'sale') {
                     foreach ($step['allocations'] as $allocation) {
                         $updated = $wpdb->query($wpdb->prepare(
-                            "UPDATE " . MGWS_DB::table_levels() . "
+                            'UPDATE %i
                              SET qty = qty - %d, updated_at_gmt = %s
                              WHERE site_id = %d AND warehouse_id = %d AND product_id = %d AND variation_id = %d
                                AND room = %s AND rack = %s AND shelf = %s
-                               AND qty >= %d",
+                               AND qty >= %d',
+                            MGWS_DB::table_levels(),
                             (int) $allocation['use_qty'],
                             gmdate('Y-m-d H:i:s'),
                             (int) $allocation['site_id'],
@@ -5469,14 +5474,15 @@ public function route_pos_receipt_list(WP_REST_Request $request) {
         $where[] = '(' . implode(' OR ', $clauses) . ')';
         $params = array_merge($params, $query_params);
     }
+    // $where holds only literal "column op placeholder" fragments chosen above; every value is a placeholder.
     $where_sql = implode(' AND ', $where);
 
-    $sql = 'SELECT * FROM ' . $table . ' WHERE ' . $where_sql
+    $sql = 'SELECT * FROM %i WHERE ' . $where_sql
         . ' ORDER BY id DESC LIMIT %d OFFSET %d';
-    $rows = $wpdb->get_results($wpdb->prepare($sql, array_merge($params, array($limit, $offset))), ARRAY_A);
+    $rows = $wpdb->get_results($wpdb->prepare($sql, array_merge(array($table), $params, array($limit, $offset))), ARRAY_A); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
 
-    $count_sql = 'SELECT COUNT(*) FROM ' . $table . ' WHERE ' . $where_sql;
-    $total_rows = (int) $wpdb->get_var($wpdb->prepare($count_sql, $params));
+    $count_sql = 'SELECT COUNT(*) FROM %i WHERE ' . $where_sql;
+    $total_rows = (int) $wpdb->get_var($wpdb->prepare($count_sql, array_merge(array($table), $params))); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
 
     $summary_sql = 'SELECT COALESCE(SUM(total),0) AS total, COALESCE(SUM(vat_total),0) AS vat_total,'
         . ' COALESCE(SUM(subtotal),0) AS subtotal, COALESCE(SUM(discount_total),0) AS discount_total,'
@@ -5485,11 +5491,8 @@ public function route_pos_receipt_list(WP_REST_Request $request) {
         . ' SUM(CASE WHEN operation_type = %s THEN 1 ELSE 0 END) AS sales_count,'
         . ' SUM(CASE WHEN operation_type = %s THEN 1 ELSE 0 END) AS returns_count,'
         . ' SUM(CASE WHEN operation_type = %s THEN 1 ELSE 0 END) AS exchanges_count,'
-        . ' COUNT(*) AS document_count FROM ' . $table . ' WHERE ' . $where_sql;
-    $summary = $wpdb->get_row($wpdb->prepare(
-        $summary_sql,
-        array_merge(array('sale', 'return', 'exchange'), $params)
-    ), ARRAY_A);
+        . ' COUNT(*) AS document_count FROM %i WHERE ' . $where_sql;
+    $summary = $wpdb->get_row($wpdb->prepare($summary_sql, array_merge(array('sale', 'return', 'exchange', $table), $params)), ARRAY_A); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
 
     // Totali per metodo di pagamento: servono alla chiusura del turno, che
     // confronta atteso e contato senza rileggere ogni documento.
@@ -5497,9 +5500,9 @@ public function route_pos_receipt_list(WP_REST_Request $request) {
         . ' SUM(CASE WHEN total >= 0 THEN total ELSE 0 END) AS collected,'
         . ' SUM(CASE WHEN total < 0 THEN -total ELSE 0 END) AS refunded,'
         . ' COUNT(*) AS document_count'
-        . ' FROM ' . $table . ' WHERE ' . $where_sql
+        . ' FROM %i WHERE ' . $where_sql
         . " AND payment_method <> '' GROUP BY payment_method";
-    $method_rows = $wpdb->get_results($wpdb->prepare($method_sql, $params), ARRAY_A);
+    $method_rows = $wpdb->get_results($wpdb->prepare($method_sql, array_merge(array($table), $params)), ARRAY_A); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
     $by_method = array();
     if (is_array($method_rows)) {
         foreach ($method_rows as $method_row) {
@@ -5565,7 +5568,8 @@ public function route_pos_receipt_get(WP_REST_Request $request) {
 
     global $wpdb;
     $lines = $wpdb->get_results($wpdb->prepare(
-        'SELECT * FROM ' . MGWS_DB::table_pos_receipt_lines() . ' WHERE receipt_id = %d ORDER BY id ASC',
+        'SELECT * FROM %i WHERE receipt_id = %d ORDER BY id ASC',
+        MGWS_DB::table_pos_receipt_lines(),
         (int) $row['id']
     ), ARRAY_A);
 
@@ -6253,7 +6257,8 @@ private function resolve_pos_shift_ident($ident) {
             return new WP_Error('mgws_unavailable', 'WooCommerce API table not found', array('status' => 503));
         }
         $items = $wpdb->get_results($wpdb->prepare(
-            "SELECT key_id, description, permissions, truncated_key, last_access FROM {$table} WHERE user_id=%d ORDER BY key_id DESC",
+            'SELECT key_id, description, permissions, truncated_key, last_access FROM %i WHERE user_id=%d ORDER BY key_id DESC',
+            $table,
             (int) $target->ID
         ), ARRAY_A);
         if (!is_array($items)) {
@@ -7237,7 +7242,8 @@ private function resolve_pos_shift_ident($ident) {
         $exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $like));
         if (!empty($exists)) {
             $pid = (int) $wpdb->get_var($wpdb->prepare(
-                "SELECT product_id FROM {$atum_table} WHERE barcode = %s LIMIT 1",
+                'SELECT product_id FROM %i WHERE barcode = %s LIMIT 1',
+                $atum_table,
                 $barcode
             ));
             if ($pid > 0) {

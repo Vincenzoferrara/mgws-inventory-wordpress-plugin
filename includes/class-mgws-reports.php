@@ -121,9 +121,9 @@ class MGWS_Reports {
     public static function catalog() {
         global $wpdb;
         $receipts = MGWS_DB::table_pos_receipts();
-        $registers = $wpdb->get_col("SELECT DISTINCT register_name FROM {$receipts} WHERE register_name <> '' ORDER BY register_name");
-        $payments = $wpdb->get_col("SELECT DISTINCT payment_method FROM {$receipts} WHERE payment_method <> '' ORDER BY payment_method");
-        $operator_ids = $wpdb->get_col("SELECT DISTINCT created_by FROM {$receipts} WHERE created_by > 0");
+        $registers = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT register_name FROM %i WHERE register_name <> '' ORDER BY register_name", $receipts));
+        $payments = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT payment_method FROM %i WHERE payment_method <> '' ORDER BY payment_method", $receipts));
+        $operator_ids = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT created_by FROM %i WHERE created_by > 0", $receipts));
         $operators = array();
         foreach ((array) $operator_ids as $operator_id) {
             $operators[] = array('id' => (int) $operator_id, 'name' => self::user_label((int) $operator_id));
@@ -468,7 +468,9 @@ class MGWS_Reports {
             . ' WHERE ' . implode(' AND ', $where)
             . ($dimension !== null ? ' GROUP BY dim_key' : '');
 
-        $rows = $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A);
+        // $sql is assembled from this class's own fragments: plugin and WooCommerce table names, whitelisted
+        // dimensions and filters. Every request value is a placeholder bound through $params.
+        $rows = $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
         return is_array($rows) ? $rows : array();
     }
 
@@ -704,7 +706,8 @@ class MGWS_Reports {
             . ' SUM(c.cash_counted) AS cash_counted, SUM(c.card_counted) AS card_counted'
             . " FROM {$table} c WHERE " . implode(' AND ', $where)
             . ($dimension !== null ? ' GROUP BY dim_key' : '');
-        $rows = $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A);
+        // $sql is assembled from the closings table name, a whitelisted dimension and IN lists of placeholders.
+        $rows = $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
         return is_array($rows) ? $rows : array();
     }
 

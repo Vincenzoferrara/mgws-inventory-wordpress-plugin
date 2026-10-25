@@ -133,7 +133,8 @@ class MGWS_DB {
 
         if ($field === 'room') {
             return (int) $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(*) FROM {$levels} WHERE site_id=%d AND room=%s",
+                "SELECT COUNT(*) FROM %i WHERE site_id=%d AND room=%s",
+                $levels,
                 $site_id,
                 $value
             ));
@@ -143,7 +144,8 @@ class MGWS_DB {
                 return 0;
             }
             return (int) $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(*) FROM {$levels} WHERE site_id=%d AND room=%s AND rack=%s",
+                "SELECT COUNT(*) FROM %i WHERE site_id=%d AND room=%s AND rack=%s",
+                $levels,
                 $site_id,
                 $parent_room,
                 $value
@@ -154,7 +156,8 @@ class MGWS_DB {
                 return 0;
             }
             return (int) $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(*) FROM {$levels} WHERE site_id=%d AND room=%s AND rack=%s AND shelf=%s",
+                "SELECT COUNT(*) FROM %i WHERE site_id=%d AND room=%s AND rack=%s AND shelf=%s",
+                $levels,
                 $site_id,
                 $parent_room,
                 $parent_rack,
@@ -643,7 +646,8 @@ class MGWS_DB {
             return 0;
         }
         return (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$table} WHERE site_id=%d",
+            "SELECT COUNT(*) FROM %i WHERE site_id=%d",
+            $table,
             $site_id
         ));
     }
@@ -656,7 +660,8 @@ class MGWS_DB {
             return 0;
         }
         return (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$table} WHERE warehouse_id=%d",
+            "SELECT COUNT(*) FROM %i WHERE warehouse_id=%d",
+            $table,
             $warehouse_id
         ));
     }
@@ -669,7 +674,8 @@ class MGWS_DB {
             return 0;
         }
         return (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$table} WHERE site_id=%d",
+            "SELECT COUNT(*) FROM %i WHERE site_id=%d",
+            $table,
             $site_id
         ));
     }
@@ -682,7 +688,8 @@ class MGWS_DB {
             return 0;
         }
         return (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$table} WHERE warehouse_id=%d",
+            "SELECT COUNT(*) FROM %i WHERE warehouse_id=%d",
+            $table,
             $warehouse_id
         ));
     }
@@ -797,33 +804,31 @@ class MGWS_DB {
 
     public static function list_employees($search = '', $include_inactive = false, $limit = 100) {
         global $wpdb;
-        $table = self::table_employees();
-        $where = array();
-        $params = array();
-        if (!$include_inactive) {
-            $where[] = 'active = %d';
-            $params[] = 1;
-        }
         $search = trim((string) $search);
-        if ($search !== '') {
-            $like = '%' . $wpdb->esc_like($search) . '%';
-            $where[] = '(first_name LIKE %s OR last_name LIKE %s OR email LIKE %s OR role_label LIKE %s)';
-            array_push($params, $like, $like, $like, $like);
-        }
+        $like = '%' . $wpdb->esc_like($search) . '%';
         $limit = max(1, min(200, (int) $limit));
-        $sql = 'SELECT * FROM ' . $table;
-        if (!empty($where)) {
-            $sql .= ' WHERE ' . implode(' AND ', $where);
-        }
-        $sql .= ' ORDER BY active DESC, last_name ASC, first_name ASC, id ASC LIMIT %d';
-        $params[] = $limit;
-        return $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A);
+        // Optional filters are switched off by their own placeholder, so the SQL stays a literal.
+        return $wpdb->get_results($wpdb->prepare(
+            'SELECT * FROM %i'
+            . ' WHERE (%d = 1 OR active = 1)'
+            . " AND (%s = '' OR first_name LIKE %s OR last_name LIKE %s OR email LIKE %s OR role_label LIKE %s)"
+            . ' ORDER BY active DESC, last_name ASC, first_name ASC, id ASC LIMIT %d',
+            self::table_employees(),
+            $include_inactive ? 1 : 0,
+            $search,
+            $like,
+            $like,
+            $like,
+            $like,
+            $limit
+        ), ARRAY_A);
     }
 
     public static function get_employee($employee_id) {
         global $wpdb;
         return $wpdb->get_row($wpdb->prepare(
-            'SELECT * FROM ' . self::table_employees() . ' WHERE id = %d LIMIT 1',
+            'SELECT * FROM %i WHERE id = %d LIMIT 1',
+            self::table_employees(),
             (int) $employee_id
         ), ARRAY_A);
     }
@@ -948,12 +953,12 @@ class MGWS_DB {
                 $params[] = (string) $value;
             }
         }
-        $sql = 'SELECT * FROM ' . $table . ' WHERE ' . implode(' AND ', $where);
+        $sql = 'SELECT * FROM %i WHERE ' . implode(' AND ', $where);
         if ($order_by !== '') {
             $sql .= ' ORDER BY ' . $order_by;
         }
-        $query = empty($params) ? $sql : $wpdb->prepare($sql, $params);
-        $rows = $wpdb->get_results($query, ARRAY_A);
+        // $where holds "column=placeholder" pairs whose column passed the [a-z_] check above, and $order_by is a literal written by each caller.
+        $rows = $wpdb->get_results($wpdb->prepare($sql, array_merge(array($table), $params)), ARRAY_A); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
         if (!is_array($rows)) {
             return array();
         }
@@ -1105,20 +1110,19 @@ class MGWS_DB {
         if (!is_array($rule)) {
             return 0;
         }
-        $levels = self::table_levels();
-        $where = array('product_id=%d', 'variation_id=%d');
-        $params = array((int) $rule['product_id'], (int) $rule['variation_id']);
-        if ((int) ($rule['site_id'] ?? 0) > 0) {
-            $where[] = 'site_id=%d';
-            $params[] = (int) $rule['site_id'];
-        }
-        if ((int) ($rule['warehouse_id'] ?? 0) > 0) {
-            $where[] = 'warehouse_id=%d';
-            $params[] = (int) $rule['warehouse_id'];
-        }
+        // A site or warehouse of 0 means "any", so its filter switches itself off.
+        $site_id = max(0, (int) ($rule['site_id'] ?? 0));
+        $warehouse_id = max(0, (int) ($rule['warehouse_id'] ?? 0));
         $rows = $wpdb->get_results($wpdb->prepare(
-            'SELECT site_id, warehouse_id, product_id, variation_id, qty FROM ' . $levels . ' WHERE ' . implode(' AND ', $where),
-            $params
+            'SELECT site_id, warehouse_id, product_id, variation_id, qty FROM %i'
+            . ' WHERE product_id=%d AND variation_id=%d AND (%d = 0 OR site_id=%d) AND (%d = 0 OR warehouse_id=%d)',
+            self::table_levels(),
+            (int) $rule['product_id'],
+            (int) $rule['variation_id'],
+            $site_id,
+            $site_id,
+            $warehouse_id,
+            $warehouse_id
         ), ARRAY_A);
         $stock = 0;
         foreach (is_array($rows) ? $rows : array() as $row) {
@@ -1408,7 +1412,8 @@ class MGWS_DB {
         }
 
         return $wpdb->get_row($wpdb->prepare(
-            'SELECT * FROM ' . self::table_loyalty_cards() . ' WHERE customer_id = %d LIMIT 1',
+            'SELECT * FROM %i WHERE customer_id = %d LIMIT 1',
+            self::table_loyalty_cards(),
             $customer_id
         ), ARRAY_A);
     }
@@ -1421,7 +1426,8 @@ class MGWS_DB {
         }
 
         return $wpdb->get_row($wpdb->prepare(
-            'SELECT * FROM ' . self::table_loyalty_cards() . ' WHERE card_number = %s LIMIT 1',
+            'SELECT * FROM %i WHERE card_number = %s LIMIT 1',
+            self::table_loyalty_cards(),
             $card_number
         ), ARRAY_A);
     }
@@ -1430,14 +1436,14 @@ class MGWS_DB {
         global $wpdb;
         $cards = self::table_loyalty_cards();
         return $wpdb->get_results(
-            "SELECT c.id, c.customer_id, c.card_number, c.tier, c.points_balance, c.enabled, c.created_at_gmt, c.updated_at_gmt,
+            $wpdb->prepare("SELECT c.id, c.customer_id, c.card_number, c.tier, c.points_balance, c.enabled, c.created_at_gmt, c.updated_at_gmt,
                     u.user_email,
                     um_first.meta_value AS first_name,
                     um_last.meta_value AS last_name
-             FROM {$cards} c
+             FROM %i c
              LEFT JOIN {$wpdb->users} u ON c.customer_id = u.ID
              LEFT JOIN {$wpdb->usermeta} um_first ON c.customer_id = um_first.user_id AND um_first.meta_key = 'first_name'
-             LEFT JOIN {$wpdb->usermeta} um_last ON c.customer_id = um_last.user_id AND um_last.meta_key = 'last_name'",
+             LEFT JOIN {$wpdb->usermeta} um_last ON c.customer_id = um_last.user_id AND um_last.meta_key = 'last_name'", $cards),
             ARRAY_A
         );
     }
@@ -1456,7 +1462,8 @@ class MGWS_DB {
 
         $cards = self::table_loyalty_cards();
         $existing_owner = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT customer_id FROM {$cards} WHERE card_number = %s AND customer_id != %d LIMIT 1",
+            "SELECT customer_id FROM %i WHERE card_number = %s AND customer_id != %d LIMIT 1",
+            $cards,
             $card_number,
             $customer_id
         ));
@@ -1622,8 +1629,8 @@ class MGWS_DB {
         $offset = ($page - 1) * $per_page;
         $rows = $wpdb->get_results($wpdb->prepare(
             'SELECT id, customer_id, direction, points_delta, balance_after, reference, note, created_by_user_id, created_at_gmt'
-            . ' FROM ' . self::table_loyalty_movements()
-            . ' WHERE customer_id = %d ORDER BY created_at_gmt DESC, id DESC LIMIT %d OFFSET %d',
+            . ' FROM %i WHERE customer_id = %d ORDER BY created_at_gmt DESC, id DESC LIMIT %d OFFSET %d',
+            self::table_loyalty_movements(),
             $customer_id,
             $per_page,
             $offset
@@ -1638,7 +1645,7 @@ class MGWS_DB {
 
         // Every known tier is always present, so clients can read a count without checking for it.
         $tier_distribution = array('bronze' => 0, 'silver' => 0, 'gold' => 0, 'platinum' => 0);
-        $tier_rows = $wpdb->get_results("SELECT tier, COUNT(*) AS total FROM {$cards} GROUP BY tier", ARRAY_A);
+        $tier_rows = $wpdb->get_results($wpdb->prepare("SELECT tier, COUNT(*) AS total FROM %i GROUP BY tier", $cards), ARRAY_A);
         foreach ((array) $tier_rows as $row) {
             $tier = sanitize_key((string) $row['tier']);
             if ($tier !== '') {
@@ -1647,10 +1654,10 @@ class MGWS_DB {
         }
 
         return array(
-            'customers' => (int) $wpdb->get_var("SELECT COUNT(*) FROM {$cards}"),
-            'cards' => (int) $wpdb->get_var("SELECT COUNT(*) FROM {$cards} WHERE card_number IS NOT NULL AND card_number <> ''"),
-            'points' => (int) $wpdb->get_var("SELECT COALESCE(SUM(points_balance), 0) FROM {$cards}"),
-            'total_points_issued' => (int) $wpdb->get_var("SELECT COALESCE(SUM(points_delta), 0) FROM {$movements} WHERE points_delta > 0"),
+            'customers' => (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM %i", $cards)),
+            'cards' => (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM %i WHERE card_number IS NOT NULL AND card_number <> ''", $cards)),
+            'points' => (int) $wpdb->get_var($wpdb->prepare("SELECT COALESCE(SUM(points_balance), 0) FROM %i", $cards)),
+            'total_points_issued' => (int) $wpdb->get_var($wpdb->prepare("SELECT COALESCE(SUM(points_delta), 0) FROM %i WHERE points_delta > 0", $movements)),
             'tier_distribution' => $tier_distribution,
         );
     }
@@ -1664,7 +1671,8 @@ class MGWS_DB {
 
         $table = self::table_pos_idempotency();
         return $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM {$table} WHERE idempotency_key = %s LIMIT 1",
+            "SELECT * FROM %i WHERE idempotency_key = %s LIMIT 1",
+            $table,
             $idempotency_key
         ), ARRAY_A);
     }
@@ -1813,7 +1821,8 @@ public static function issue_pos_receipt(array $row) {
     // Idempotenza: la stessa receipt_key non deve mai produrre due righe.
     // Idempotency: the same receipt_key must never produce two rows.
     $existing = $wpdb->get_row($wpdb->prepare(
-        'SELECT * FROM ' . $table . ' WHERE receipt_key = %s LIMIT 1',
+        'SELECT * FROM %i WHERE receipt_key = %s LIMIT 1',
+        $table,
         $receipt_key
     ), ARRAY_A);
     if (is_array($existing)) {
@@ -1827,8 +1836,8 @@ public static function issue_pos_receipt(array $row) {
 
     if (!$issued_by_device) {
         $next = $wpdb->get_var($wpdb->prepare(
-            'SELECT COALESCE(MAX(sequential_number), 0) + 1 FROM ' . $table
-            . ' WHERE business_day_id = %s AND register_name = %s',
+            'SELECT COALESCE(MAX(sequential_number), 0) + 1 FROM %i WHERE business_day_id = %s AND register_name = %s',
+            $table,
             $business_day_id,
             $register_name
         ));
@@ -1873,18 +1882,20 @@ public static function issue_pos_receipt(array $row) {
         // already taken. Retry once with a recalculated number.
         if (!$issued_by_device) {
             $next = $wpdb->get_var($wpdb->prepare(
-                'SELECT COALESCE(MAX(sequential_number), 0) + 1 FROM ' . $table
-                . ' WHERE business_day_id = %s AND register_name = %s',
+                'SELECT COALESCE(MAX(sequential_number), 0) + 1 FROM %i WHERE business_day_id = %s AND register_name = %s',
+                $table,
                 $business_day_id,
                 $register_name
             ));
             $wpdb->query($wpdb->prepare(
-                'UPDATE ' . $table . ' SET sequential_number = %d WHERE receipt_key = %s',
+                'UPDATE %i SET sequential_number = %d WHERE receipt_key = %s',
+                $table,
                 (int) $next,
                 $receipt_key
             ));
             $row_after = $wpdb->get_row($wpdb->prepare(
-                'SELECT * FROM ' . $table . ' WHERE receipt_key = %s LIMIT 1',
+                'SELECT * FROM %i WHERE receipt_key = %s LIMIT 1',
+                $table,
                 $receipt_key
             ), ARRAY_A);
             if (is_array($row_after)) {
@@ -1895,7 +1906,8 @@ public static function issue_pos_receipt(array $row) {
     }
 
     $saved = $wpdb->get_row($wpdb->prepare(
-        'SELECT * FROM ' . $table . ' WHERE receipt_key = %s LIMIT 1',
+        'SELECT * FROM %i WHERE receipt_key = %s LIMIT 1',
+        $table,
         $receipt_key
     ), ARRAY_A);
 
@@ -1962,28 +1974,28 @@ public static function update_pos_receipt_status($receipt_id, $status, $note = '
  */
 public static function list_pos_closings($filters = array()) {
     global $wpdb;
-    $table = self::table_pos_closings();
-    $where = array('1=1');
-    $params = array();
-    if (!empty($filters['business_day_id'])) {
-        $where[] = 'business_day_id = %s';
-        $params[] = (string) $filters['business_day_id'];
-    }
-    if (!empty($filters['register_name'])) {
-        $where[] = 'register_name = %s';
-        $params[] = (string) $filters['register_name'];
-    }
+    // An empty filter matches every row, so the SQL stays a literal.
+    $business_day_id = !empty($filters['business_day_id']) ? (string) $filters['business_day_id'] : '';
+    $register_name = !empty($filters['register_name']) ? (string) $filters['register_name'] : '';
     $limit = max(1, min(500, (int) ($filters['limit'] ?? 100)));
-    $sql = 'SELECT * FROM ' . $table . ' WHERE ' . implode(' AND ', $where)
-        . ' ORDER BY id DESC LIMIT %d';
-    $rows = $wpdb->get_results($wpdb->prepare($sql, array_merge($params, array($limit))), ARRAY_A);
+    $rows = $wpdb->get_results($wpdb->prepare(
+        "SELECT * FROM %i WHERE (%s = '' OR business_day_id = %s) AND (%s = '' OR register_name = %s)"
+        . ' ORDER BY id DESC LIMIT %d',
+        self::table_pos_closings(),
+        $business_day_id,
+        $business_day_id,
+        $register_name,
+        $register_name,
+        $limit
+    ), ARRAY_A);
     return is_array($rows) ? $rows : array();
 }
 
 public static function get_pos_closing_by_id($closing_id) {
     global $wpdb;
     $row = $wpdb->get_row($wpdb->prepare(
-        'SELECT * FROM ' . self::table_pos_closings() . ' WHERE id = %d LIMIT 1',
+        'SELECT * FROM %i WHERE id = %d LIMIT 1',
+        self::table_pos_closings(),
         (int) $closing_id
     ), ARRAY_A);
     return is_array($row) ? $row : null;
@@ -1992,7 +2004,8 @@ public static function get_pos_closing_by_id($closing_id) {
 public static function get_pos_closing($closing_key) {
     global $wpdb;
     $row = $wpdb->get_row($wpdb->prepare(
-        'SELECT * FROM ' . self::table_pos_closings() . ' WHERE closing_key = %s LIMIT 1',
+        'SELECT * FROM %i WHERE closing_key = %s LIMIT 1',
+        self::table_pos_closings(),
         (string) $closing_key
     ), ARRAY_A);
     return is_array($row) ? $row : null;
@@ -2012,7 +2025,8 @@ public static function insert_pos_closing(array $row) {
         return new WP_Error('mgws_bad_request', 'closing_key is required', array('status' => 400));
     }
     $existing = $wpdb->get_row($wpdb->prepare(
-        'SELECT * FROM ' . $table . ' WHERE closing_key = %s LIMIT 1',
+        'SELECT * FROM %i WHERE closing_key = %s LIMIT 1',
+        $table,
         $closing_key
     ), ARRAY_A);
     if (is_array($existing)) {
@@ -2044,7 +2058,8 @@ public static function insert_pos_closing(array $row) {
     ));
 
     $saved = $wpdb->get_row($wpdb->prepare(
-        'SELECT * FROM ' . $table . ' WHERE closing_key = %s LIMIT 1',
+        'SELECT * FROM %i WHERE closing_key = %s LIMIT 1',
+        $table,
         $closing_key
     ), ARRAY_A);
     if (!is_array($saved)) {
@@ -2056,7 +2071,8 @@ public static function insert_pos_closing(array $row) {
 public static function get_pos_closing_corrections($closing_id) {
     global $wpdb;
     $raw = $wpdb->get_var($wpdb->prepare(
-        'SELECT corrections FROM ' . self::table_pos_closings() . ' WHERE id = %d',
+        'SELECT corrections FROM %i WHERE id = %d',
+        self::table_pos_closings(),
         (int) $closing_id
     ));
     if (empty($raw)) {
@@ -2073,7 +2089,8 @@ public static function get_pos_closing_corrections($closing_id) {
 public static function update_pos_closing_corrections($closing_id, $note) {
     global $wpdb;
     $row = $wpdb->get_row($wpdb->prepare(
-        'SELECT * FROM ' . self::table_pos_closings() . ' WHERE id = %d',
+        'SELECT * FROM %i WHERE id = %d',
+        self::table_pos_closings(),
         (int) $closing_id
     ), ARRAY_A);
     if (!is_array($row)) {
@@ -2096,7 +2113,8 @@ public static function update_pos_closing_corrections($closing_id, $note) {
 public static function get_pos_receipt_corrections($receipt_id) {
     global $wpdb;
     $raw = $wpdb->get_var($wpdb->prepare(
-        'SELECT corrections FROM ' . self::table_pos_receipts() . ' WHERE id = %d',
+        'SELECT corrections FROM %i WHERE id = %d',
+        self::table_pos_receipts(),
         (int) $receipt_id
     ));
     if (empty($raw)) {
@@ -2109,7 +2127,8 @@ public static function get_pos_receipt_corrections($receipt_id) {
 public static function get_pos_receipt_by_id($receipt_id) {
     global $wpdb;
     $row = $wpdb->get_row($wpdb->prepare(
-        'SELECT * FROM ' . self::table_pos_receipts() . ' WHERE id = %d LIMIT 1',
+        'SELECT * FROM %i WHERE id = %d LIMIT 1',
+        self::table_pos_receipts(),
         (int) $receipt_id
     ), ARRAY_A);
     return is_array($row) ? $row : null;
@@ -2118,7 +2137,8 @@ public static function get_pos_receipt_by_id($receipt_id) {
 public static function get_pos_receipt_by_key($receipt_key) {
     global $wpdb;
     $row = $wpdb->get_row($wpdb->prepare(
-        'SELECT * FROM ' . self::table_pos_receipts() . ' WHERE receipt_key = %s LIMIT 1',
+        'SELECT * FROM %i WHERE receipt_key = %s LIMIT 1',
+        self::table_pos_receipts(),
         (string) $receipt_key
     ), ARRAY_A);
     return is_array($row) ? $row : null;
@@ -2141,7 +2161,8 @@ public static function save_pos_receipt_lines($receipt_id, array $lines) {
 
     $table = self::table_pos_receipt_lines();
     $existing = (int) $wpdb->get_var($wpdb->prepare(
-        'SELECT COUNT(*) FROM ' . $table . ' WHERE receipt_id = %d',
+        'SELECT COUNT(*) FROM %i WHERE receipt_id = %d',
+        $table,
         (int) $receipt_id
     ));
     if ($existing > 0) {
@@ -2189,9 +2210,11 @@ public static function get_pos_receipt_sold_lines($receipt_key) {
     // Explicit quoting keeps the placeholders from becoming unquoted literals
     // and breaking the IN clause.
     $rows = $wpdb->get_results($wpdb->prepare(
-        'SELECT rl.* FROM ' . self::table_pos_receipt_lines() . ' rl'
-        . ' INNER JOIN ' . self::table_pos_receipts() . ' r ON r.id = rl.receipt_id'
-        . ' WHERE r.receipt_key = %s AND r.operation_type IN (\'sale\', \'exchange\')',
+        'SELECT rl.* FROM %i rl'
+        . ' INNER JOIN %i r ON r.id = rl.receipt_id'
+        . " WHERE r.receipt_key = %s AND r.operation_type IN ('sale', 'exchange')",
+        self::table_pos_receipt_lines(),
+        self::table_pos_receipts(),
         (string) $receipt_key
     ), ARRAY_A);
     return is_array($rows) ? $rows : array();
@@ -2234,11 +2257,12 @@ public static function get_pos_returnable_quantities($receipt_key) {
     }
 
     $returns = $wpdb->get_results($wpdb->prepare(
-        'SELECT rl.source_line_key, SUM(ABS(rl.quantity)) AS returned_quantity FROM '
-        . self::table_pos_receipt_lines() . ' rl'
-        . ' INNER JOIN ' . self::table_pos_receipts() . ' r ON r.id = rl.receipt_id'
+        'SELECT rl.source_line_key, SUM(ABS(rl.quantity)) AS returned_quantity FROM %i rl'
+        . ' INNER JOIN %i r ON r.id = rl.receipt_id'
         . ' WHERE rl.movement_type = %s AND rl.source_receipt_key = %s'
         . ' GROUP BY rl.source_line_key',
+        self::table_pos_receipt_lines(),
+        self::table_pos_receipts(),
         'return',
         (string) $receipt_key
     ), ARRAY_A);
@@ -2280,7 +2304,8 @@ public static function insert_pos_shift($row) {
     public static function get_pos_shift_by_key($shift_key) {
         global $wpdb;
         $row = $wpdb->get_row($wpdb->prepare(
-            'SELECT * FROM ' . self::table_pos_shifts() . ' WHERE shift_key = %s LIMIT 1',
+            'SELECT * FROM %i WHERE shift_key = %s LIMIT 1',
+            self::table_pos_shifts(),
             (string) $shift_key
         ), ARRAY_A);
         return is_array($row) ? $row : null;
@@ -2289,7 +2314,8 @@ public static function insert_pos_shift($row) {
     public static function get_pos_shift_by_id($shift_id) {
         global $wpdb;
         $row = $wpdb->get_row($wpdb->prepare(
-            'SELECT * FROM ' . self::table_pos_shifts() . ' WHERE id = %d LIMIT 1',
+            'SELECT * FROM %i WHERE id = %d LIMIT 1',
+            self::table_pos_shifts(),
             (int) $shift_id
         ), ARRAY_A);
         return is_array($row) ? $row : null;
@@ -2298,7 +2324,8 @@ public static function insert_pos_shift($row) {
     public static function get_open_pos_shift_by_cassa($cassa_name) {
         global $wpdb;
         $row = $wpdb->get_row($wpdb->prepare(
-            'SELECT * FROM ' . self::table_pos_shifts() . ' WHERE status = %s AND cassa_name = %s ORDER BY id DESC LIMIT 1',
+            'SELECT * FROM %i WHERE status = %s AND cassa_name = %s ORDER BY id DESC LIMIT 1',
+            self::table_pos_shifts(),
             'open',
             (string) $cassa_name
         ), ARRAY_A);
@@ -2307,23 +2334,22 @@ public static function insert_pos_shift($row) {
 
     public static function list_pos_shifts($filters = array(), $limit = 100) {
         global $wpdb;
-        $where = array('1=1');
-        $params = array();
-        if (!empty($filters['status'])) {
-            $where[] = 'status = %s';
-            $params[] = (string) $filters['status'];
-        }
-        if (!empty($filters['cassa_name'])) {
-            $where[] = 'cassa_name = %s';
-            $params[] = (string) $filters['cassa_name'];
-        }
-        if (!empty($filters['giornata_id'])) {
-            $where[] = 'giornata_id = %s';
-            $params[] = (string) $filters['giornata_id'];
-        }
-        $sql = 'SELECT * FROM ' . self::table_pos_shifts() . ' WHERE ' . implode(' AND ', $where) . ' ORDER BY opened_at_gmt DESC, id DESC LIMIT %d';
-        $params[] = max(1, min(100, (int) $limit));
-        $rows = $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A);
+        // An empty filter matches every row, so the SQL stays a literal.
+        $status = !empty($filters['status']) ? (string) $filters['status'] : '';
+        $cassa_name = !empty($filters['cassa_name']) ? (string) $filters['cassa_name'] : '';
+        $giornata_id = !empty($filters['giornata_id']) ? (string) $filters['giornata_id'] : '';
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM %i WHERE (%s = '' OR status = %s) AND (%s = '' OR cassa_name = %s) AND (%s = '' OR giornata_id = %s)"
+            . ' ORDER BY opened_at_gmt DESC, id DESC LIMIT %d',
+            self::table_pos_shifts(),
+            $status,
+            $status,
+            $cassa_name,
+            $cassa_name,
+            $giornata_id,
+            $giornata_id,
+            max(1, min(100, (int) $limit))
+        ), ARRAY_A);
         return is_array($rows) ? $rows : array();
     }
 
@@ -2844,18 +2870,18 @@ public static function insert_pos_shift($row) {
         dbDelta($sql_pos_closings);
         dbDelta($sql_loyalty_cards);
         // Aggiunge la colonna "enabled" se manca dalle installazioni precedenti.
-        $existingColumns = $wpdb->get_col("SHOW COLUMNS FROM {$loyalty_cards} LIKE 'enabled'");
+        $existingColumns = $wpdb->get_col($wpdb->prepare('SHOW COLUMNS FROM %i LIKE %s', $loyalty_cards, 'enabled'));
         if (empty($existingColumns)) {
-            $wpdb->query("ALTER TABLE {$loyalty_cards} ADD COLUMN enabled TINYINT(1) NOT NULL DEFAULT 1 AFTER updated_at_gmt");
+            $wpdb->query($wpdb->prepare("ALTER TABLE %i ADD COLUMN enabled TINYINT(1) NOT NULL DEFAULT 1 AFTER updated_at_gmt", $loyalty_cards));
         }
         dbDelta($sql_loyalty_movements);
         dbDelta($sql_fornitori);
         // Migrazione da fornitori basati su Woo customer: la nuova anagrafica
         // fornitori e' autonoma e non deve avere colonne utente/customer.
-        $legacySupplierColumns = $wpdb->get_col("SHOW COLUMNS FROM {$fornitori} LIKE 'woo_customer_id'");
+        $legacySupplierColumns = $wpdb->get_col($wpdb->prepare('SHOW COLUMNS FROM %i LIKE %s', $fornitori, 'woo_customer_id'));
         if (!empty($legacySupplierColumns)) {
-            $wpdb->query("ALTER TABLE {$fornitori} DROP INDEX uq_woo_customer");
-            $wpdb->query("ALTER TABLE {$fornitori} DROP COLUMN woo_customer_id");
+            $wpdb->query($wpdb->prepare("ALTER TABLE %i DROP INDEX uq_woo_customer", $fornitori));
+            $wpdb->query($wpdb->prepare("ALTER TABLE %i DROP COLUMN woo_customer_id", $fornitori));
         }
         dbDelta($sql_reorder_rules);
         dbDelta($sql_purchase_orders);
@@ -2937,16 +2963,17 @@ public static function insert_pos_shift($row) {
         }
         $where = implode(' OR ', $conds);
         $sql = "SELECT site_id, warehouse_id, product_id, variation_id, qty, room, rack, shelf
-                FROM {$table}
+                FROM %i
                 WHERE qty >= 1 AND ({$where})";
+        array_unshift($params, $table);
         if ((int) $site_limit > 0) {
             $sql .= ' AND site_id = %d';
             $params[] = (int) $site_limit;
         }
         $sql .= ' ORDER BY site_id ASC, warehouse_id ASC, qty DESC';
 
-        $prepared = $wpdb->prepare($sql, $params);
-        $rows = $wpdb->get_results($prepared, ARRAY_A);
+        // $where repeats one literal "(product_id = %d AND variation_id = %d)" pair per item; every value is a placeholder.
+        $rows = $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
         $rows = is_array($rows) ? $rows : array();
 
         // If warehouse has location links, hide non-allowed locations.
@@ -2984,16 +3011,17 @@ public static function insert_pos_shift($row) {
             return array();
         }
 
-        $sql = "SELECT * FROM {$table} WHERE product_id=%d AND variation_id=%d";
-        $params = array($product_id, $variation_id);
-        if ($site_limit > 0) {
-            $sql .= ' AND site_id=%d';
-            $params[] = $site_limit;
-        }
-        $sql .= ' ORDER BY site_id ASC, warehouse_id ASC, room ASC, rack ASC, shelf ASC';
-
-        $prepared = $wpdb->prepare($sql, $params);
-        $rows = $wpdb->get_results($prepared, ARRAY_A);
+        // A site limit of 0 means every site, so its filter switches itself off.
+        $site_limit = max(0, $site_limit);
+        $rows = $wpdb->get_results($wpdb->prepare(
+            'SELECT * FROM %i WHERE product_id=%d AND variation_id=%d AND (%d = 0 OR site_id=%d)'
+            . ' ORDER BY site_id ASC, warehouse_id ASC, room ASC, rack ASC, shelf ASC',
+            $table,
+            $product_id,
+            $variation_id,
+            $site_limit,
+            $site_limit
+        ), ARRAY_A);
         return is_array($rows) ? $rows : array();
     }
 
@@ -3005,15 +3033,16 @@ public static function insert_pos_shift($row) {
         if ($warehouse_id <= 0) {
             return array();
         }
-        $sql = "SELECT * FROM {$table} WHERE warehouse_id=%d";
-        $params = array($warehouse_id);
-        if ($site_limit > 0) {
-            $sql .= ' AND site_id=%d';
-            $params[] = $site_limit;
-        }
-        $sql .= ' ORDER BY product_id ASC, variation_id ASC, room ASC, rack ASC, shelf ASC';
-        $prepared = $wpdb->prepare($sql, $params);
-        $rows = $wpdb->get_results($prepared, ARRAY_A);
+        // A site limit of 0 means every site, so its filter switches itself off.
+        $site_limit = max(0, $site_limit);
+        $rows = $wpdb->get_results($wpdb->prepare(
+            'SELECT * FROM %i WHERE warehouse_id=%d AND (%d = 0 OR site_id=%d)'
+            . ' ORDER BY product_id ASC, variation_id ASC, room ASC, rack ASC, shelf ASC',
+            $table,
+            $warehouse_id,
+            $site_limit,
+            $site_limit
+        ), ARRAY_A);
         return is_array($rows) ? $rows : array();
     }
 
@@ -3041,7 +3070,8 @@ public static function insert_pos_shift($row) {
         $now = gmdate('Y-m-d H:i:s');
 
         $existing = $wpdb->get_row($wpdb->prepare(
-            "SELECT id, qty FROM {$levels} WHERE warehouse_id=%d AND product_id=%d AND variation_id=%d AND room=%s AND rack=%s AND shelf=%s",
+            "SELECT id, qty FROM %i WHERE warehouse_id=%d AND product_id=%d AND variation_id=%d AND room=%s AND rack=%s AND shelf=%s",
+            $levels,
             $warehouse_id,
             $product_id,
             $variation_id,
@@ -3145,7 +3175,8 @@ public static function insert_pos_shift($row) {
         $table = self::table_movements();
         $suppress = $wpdb->suppress_errors(true);
         $wpdb->query($wpdb->prepare(
-            "INSERT IGNORE INTO {$table} (movement_key, ts_gmt, user_id, type, site_id, reason_code, note) VALUES (%s, %s, %d, %s, %d, %s, %s)",
+            "INSERT IGNORE INTO %i (movement_key, ts_gmt, user_id, type, site_id, reason_code, note) VALUES (%s, %s, %d, %s, %d, %s, %s)",
+            $table,
             $key,
             gmdate('Y-m-d H:i:s'),
             (int) $user_id,
@@ -3156,7 +3187,7 @@ public static function insert_pos_shift($row) {
         ));
         $wpdb->suppress_errors($suppress);
 
-        $id = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM {$table} WHERE movement_key = %s", $key));
+        $id = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM %i WHERE movement_key = %s", $table, $key));
         return $id;
     }
 
@@ -3166,7 +3197,7 @@ public static function insert_pos_shift($row) {
         if ($id <= 0) {
             return null;
         }
-        $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM " . self::table_movements() . " WHERE id = %d", $id), ARRAY_A);
+        $row = $wpdb->get_row($wpdb->prepare('SELECT * FROM %i WHERE id = %d', self::table_movements(), $id), ARRAY_A);
         return is_array($row) ? $row : null;
     }
 
@@ -3219,10 +3250,12 @@ public static function insert_pos_shift($row) {
             $where[] = 'ts_gmt <= %s';
             $params[] = (string) $filters['date_to'];
         }
-        $sql = 'SELECT * FROM ' . self::table_moves() . ' WHERE ' . implode(' AND ', $where) . ' ORDER BY ts_gmt DESC, id DESC LIMIT %d OFFSET %d';
+        $sql = 'SELECT * FROM %i WHERE ' . implode(' AND ', $where) . ' ORDER BY ts_gmt DESC, id DESC LIMIT %d OFFSET %d';
+        array_unshift($params, self::table_moves());
         $params[] = max(1, min(100, (int) $limit));
         $params[] = max(0, (int) $offset);
-        return $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A);
+        // $where holds only literal "column op placeholder" fragments chosen above; every value is a placeholder.
+        return $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
     }
 
     public static function count_moves($filters = array()) {
@@ -3257,13 +3290,15 @@ public static function insert_pos_shift($row) {
             $where[] = 'ts_gmt <= %s';
             $params[] = (string) $filters['date_to'];
         }
-        $sql = 'SELECT COUNT(*) FROM ' . self::table_moves() . ' WHERE ' . implode(' AND ', $where);
-        return (int) $wpdb->get_var($params === array() ? $sql : $wpdb->prepare($sql, $params));
+        $sql = 'SELECT COUNT(*) FROM %i WHERE ' . implode(' AND ', $where);
+        array_unshift($params, self::table_moves());
+        // $where holds only literal "column op placeholder" fragments chosen above; every value is a placeholder.
+        return (int) $wpdb->get_var($wpdb->prepare($sql, $params)); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
     }
 
     public static function get_move($movement_id) {
         global $wpdb;
-        return $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . self::table_moves() . ' WHERE id = %d', (int) $movement_id), ARRAY_A);
+        return $wpdb->get_row($wpdb->prepare('SELECT * FROM %i WHERE id = %d', self::table_moves(), (int) $movement_id), ARRAY_A);
     }
 
     public static function insert_inventory_count_move($site_id, $warehouse_id, $product_id, $variation_id, $qty, $room, $rack, $shelf, $user_id, $session_id, $line_id, $reason_code, $note) {
@@ -3361,7 +3396,8 @@ public static function insert_pos_shift($row) {
         $shelf = self::sanitize_loc($shelf);
 
         return $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM {$levels} WHERE warehouse_id=%d AND product_id=%d AND variation_id=%d AND room=%s AND rack=%s AND shelf=%s",
+            "SELECT * FROM %i WHERE warehouse_id=%d AND product_id=%d AND variation_id=%d AND room=%s AND rack=%s AND shelf=%s",
+            $levels,
             $warehouse_id,
             $product_id,
             $variation_id,
@@ -3396,10 +3432,11 @@ public static function insert_pos_shift($row) {
 
         // Try update first.
         $updated = $wpdb->query($wpdb->prepare(
-            "UPDATE {$levels}
+            "UPDATE %i
              SET qty = qty + %d, site_id=%d, updated_at_gmt=%s
              WHERE warehouse_id=%d AND product_id=%d AND variation_id=%d AND room=%s AND rack=%s AND shelf=%s
                AND (qty + %d) >= 0",
+            $levels,
             $delta_qty,
             $site_id,
             $now,
@@ -3479,11 +3516,11 @@ public static function insert_pos_shift($row) {
             $params[] = (string) $filters['to_gmt'];
         }
 
-        $sql = "SELECT * FROM {$moves} WHERE " . implode(' AND ', $where) . " ORDER BY ts_gmt DESC, id DESC LIMIT {$limit}";
-        if (!empty($params)) {
-            $sql = $wpdb->prepare($sql, $params);
-        }
-        $rows = $wpdb->get_results($sql, ARRAY_A);
+        $sql = 'SELECT * FROM %i WHERE ' . implode(' AND ', $where) . ' ORDER BY ts_gmt DESC, id DESC LIMIT %d';
+        array_unshift($params, $moves);
+        $params[] = $limit;
+        // $where holds only literal "column op placeholder" fragments chosen above; every value is a placeholder.
+        $rows = $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
         return is_array($rows) ? $rows : array();
     }
 
@@ -3544,7 +3581,8 @@ public static function insert_pos_shift($row) {
 
         // Use real stock combos across the entire site to keep the shared structure complete.
         $combos = $wpdb->get_results($wpdb->prepare(
-            "SELECT DISTINCT room, rack, shelf FROM {$levels} WHERE site_id=%d AND room <> '' ORDER BY room ASC, rack ASC, shelf ASC LIMIT 900",
+            "SELECT DISTINCT room, rack, shelf FROM %i WHERE site_id=%d AND room <> '' ORDER BY room ASC, rack ASC, shelf ASC LIMIT 900",
+            $levels,
             $site_id
         ), ARRAY_A);
 
@@ -3599,7 +3637,8 @@ public static function insert_pos_shift($row) {
         $pid = (int) $product_id;
         $vid = (int) $variation_id;
         return (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COALESCE(SUM(qty), 0) FROM {$table} WHERE product_id=%d AND variation_id=%d",
+            "SELECT COALESCE(SUM(qty), 0) FROM %i WHERE product_id=%d AND variation_id=%d",
+            $table,
             $pid,
             $vid
         ));
@@ -3627,11 +3666,12 @@ public static function insert_pos_shift($row) {
             }
 
             $updated = $wpdb->query($wpdb->prepare(
-                "UPDATE {$levels}
+                "UPDATE %i
                  SET qty = qty - %d, updated_at_gmt = %s
                  WHERE site_id = %d AND warehouse_id = %d AND product_id = %d AND variation_id = %d
                    AND room = %s AND rack = %s AND shelf = %s
                    AND qty >= %d",
+                $levels,
                 $use_qty,
                 gmdate('Y-m-d H:i:s'),
                 $site_id,

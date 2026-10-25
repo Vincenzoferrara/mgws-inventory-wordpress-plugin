@@ -1,7 +1,7 @@
 === Warehouse Stock Manager for WooCommerce ===
 Contributors: vincenzoferrara
 Tags: woocommerce, inventory, stock, warehouse, pos
-Requires at least: 6.0
+Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 8.0
 Requires Plugins: woocommerce
@@ -91,6 +91,7 @@ The plugin exposes 34 REST endpoints under `mgws/v1` for the point of sale, loya
 * New capability mgws_manage_employees: managing employees and sites no longer comes with stock movement rights.
 * The inventory status route reports the installed plugin version.
 * The loyalty stats route also reports the total points ever issued and how many cards are in each tier.
+* Requires WordPress 6.2 or later: database queries pass table names through the %i identifier placeholder.
 
 = 2.3.0 =
 * First public release of the multi-site, multi-warehouse stock manager.
