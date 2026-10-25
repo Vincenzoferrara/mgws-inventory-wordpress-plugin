@@ -4871,6 +4871,7 @@ class MGWS_REST_API {
         $note = __('Order accepted (API).', 'mg-warehouse-stock');
         if ($allocation_audit['totals']['total_remaining'] > 0) {
             $note .= ' ' . sprintf(
+                /* translators: %d: number of units that could not be allocated. */
                 __('Warning: not enough stock for %d units.', 'mg-warehouse-stock'),
                 (int) $allocation_audit['totals']['total_remaining']
             );

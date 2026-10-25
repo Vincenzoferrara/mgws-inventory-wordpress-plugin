@@ -375,8 +375,7 @@ class MGWS_Plugin {
             if ($opt_id === '') {
                 continue;
             }
-            $sel = ((string) $selected === $opt_id) ? ' selected' : '';
-            echo '<option value="' . esc_attr($opt_id) . '"' . $sel . '>' . esc_html($opt_name) . '</option>';
+            echo '<option value="' . esc_attr($opt_id) . '"' . selected((string) $selected, $opt_id, false) . '>' . esc_html($opt_name) . '</option>';
         }
         echo '</select>';
         if ($can_add) {
@@ -395,8 +394,7 @@ class MGWS_Plugin {
             if ($v === '') {
                 continue;
             }
-            $sel = ((string) $selected === $v) ? ' selected' : '';
-            echo '<option value="' . esc_attr($v) . '"' . $sel . '>' . esc_html($v) . '</option>';
+            echo '<option value="' . esc_attr($v) . '"' . selected((string) $selected, $v, false) . '>' . esc_html($v) . '</option>';
         }
         echo '</select>';
         if ($can_add) {
@@ -412,7 +410,7 @@ class MGWS_Plugin {
             'exclude_from_search' => false,
             'show_in_admin_all_list' => true,
             'show_in_admin_status_list' => true,
-            'label_count' => _n_noop('Accepted <span class="count">(%s)</span>', 'Accepted <span class="count">(%s)</span>', 'mg-warehouse-stock'),
+            'label_count' => /* translators: %s: number of orders with the Accepted status. */ _n_noop('Accepted <span class="count">(%s)</span>', 'Accepted <span class="count">(%s)</span>', 'mg-warehouse-stock'),
         ));
     }
 
@@ -725,8 +723,7 @@ class MGWS_Plugin {
                     echo '<select class="mgws-select mgws-var-site" name="mgws_var_defaults[' . esc_attr($vid) . '][site_id]">';
                     echo '<option value="0">--</option>';
                     foreach ($sites_for_user as $s) {
-                        $sel = ((int) $s->ID === (int) $v_site_id) ? ' selected' : '';
-                        echo '<option value="' . esc_attr((int) $s->ID) . '"' . $sel . '>' . esc_html($s->post_title) . '</option>';
+                        echo '<option value="' . esc_attr((int) $s->ID) . '"' . selected((int) $s->ID, (int) $v_site_id, false) . '>' . esc_html($s->post_title) . '</option>';
                     }
                     echo '</select>';
                     echo '</div>';
@@ -739,8 +736,7 @@ class MGWS_Plugin {
                 echo '<select class="mgws-select mgws-var-warehouse" name="mgws_var_defaults[' . esc_attr($vid) . '][warehouse_id]">';
                 echo '<option value="0">--</option>';
                 foreach ($v_wh_options as $w) {
-                    $sel = ((int) $w->ID === (int) $v_wh_id) ? ' selected' : '';
-                    echo '<option value="' . esc_attr((int) $w->ID) . '"' . $sel . '>' . esc_html($w->post_title) . '</option>';
+                    echo '<option value="' . esc_attr((int) $w->ID) . '"' . selected((int) $w->ID, (int) $v_wh_id, false) . '>' . esc_html($w->post_title) . '</option>';
                 }
                 echo '</select>';
                 echo '</div>';
@@ -1359,6 +1355,7 @@ class MGWS_Plugin {
         $note = __('Order accepted.', 'mg-warehouse-stock');
         if ($allocation_audit['totals']['total_remaining'] > 0) {
             $note .= ' ' . sprintf(
+                /* translators: %d: number of units that could not be allocated. */
                 __('Warning: not enough stock for %d units.', 'mg-warehouse-stock'),
                 (int) $allocation_audit['totals']['total_remaining']
             );
@@ -1778,6 +1775,7 @@ class MGWS_Plugin {
             wp_send_json_error(array(
                 'code' => 'mgws_not_deletable',
                 'message' => sprintf(
+                    /* translators: %d: number of warehouses linked to this location. */
                     __('Cannot delete: linked to %d warehouses', 'mg-warehouse-stock'),
                     (int) $links
                 ),
@@ -1789,6 +1787,7 @@ class MGWS_Plugin {
             wp_send_json_error(array(
                 'code' => 'mgws_not_deletable',
                 'message' => sprintf(
+                    /* translators: %d: number of stock levels stored at this location. */
                     __('Cannot delete: used by %d stock levels', 'mg-warehouse-stock'),
                     (int) $used
                 ),
@@ -1962,6 +1961,7 @@ class MGWS_Plugin {
             wp_send_json_error(array(
                 'code' => 'mgws_not_deletable',
                 'message' => sprintf(
+                    /* translators: 1: number of stock levels, 2: number of stock movements. */
                     __('Cannot delete: warehouse is in use (levels=%1$d, movements=%2$d)', 'mg-warehouse-stock'),
                     (int) $levels,
                     (int) $moves
@@ -2014,6 +2014,7 @@ class MGWS_Plugin {
             wp_send_json_error(array(
                 'code' => 'mgws_not_deletable',
                 'message' => sprintf(
+                    /* translators: 1: number of stock levels, 2: number of stock movements. */
                     __('Cannot delete: site is in use (levels=%1$d, movements=%2$d)', 'mg-warehouse-stock'),
                     (int) $levels,
                     (int) $moves
@@ -2161,8 +2162,7 @@ class MGWS_Plugin {
         echo '<select name="mgws_site_id">';
         echo '<option value="0">' . esc_html__('-- select --', 'mg-warehouse-stock') . '</option>';
         foreach ($sites as $s) {
-            $sel = $current === (int) $s->ID ? ' selected' : '';
-            echo '<option value="' . esc_attr((int) $s->ID) . '"' . $sel . '>' . esc_html($s->post_title) . '</option>';
+            echo '<option value="' . esc_attr((int) $s->ID) . '"' . selected($current, (int) $s->ID, false) . '>' . esc_html($s->post_title) . '</option>';
         }
         echo '</select>';
     }
@@ -2196,8 +2196,7 @@ class MGWS_Plugin {
             echo '<select name="mg_default_site_id" id="mg_default_site_id">';
             echo '<option value="0">' . esc_html__('(All)', 'mg-warehouse-stock') . '</option>';
             foreach ($sites as $s) {
-                $sel = $current === (int) $s->ID ? ' selected' : '';
-                echo '<option value="' . esc_attr((int) $s->ID) . '"' . $sel . '>' . esc_html($s->post_title) . '</option>';
+                echo '<option value="' . esc_attr((int) $s->ID) . '"' . selected($current, (int) $s->ID, false) . '>' . esc_html($s->post_title) . '</option>';
             }
             echo '</select>';
             echo '<p class="description">' . esc_html__('When set, limits the user to a single site.', 'mg-warehouse-stock') . '</p>';
