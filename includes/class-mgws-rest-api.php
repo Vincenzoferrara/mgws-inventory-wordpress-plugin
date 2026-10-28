@@ -320,6 +320,9 @@ class MGWS_REST_API {
                 'payment_method' => $this->inventory_text_arg(),
                 'status' => $this->inventory_text_arg(),
                 'customer_id' => $this->inventory_non_negative_int_arg(0),
+                'shift_id' => $this->inventory_text_arg(),
+                'date_from' => $this->inventory_text_arg(),
+                'date_to' => $this->inventory_text_arg(),
                 'query' => $this->inventory_text_arg(),
                 'limit' => $this->inventory_non_negative_int_arg(100),
                 'offset' => $this->inventory_non_negative_int_arg(0),
@@ -4939,33 +4942,40 @@ class MGWS_REST_API {
         // Enforcement turno cassa (server-side): ogni checkout POS deve riferire
         // uno shift aperto registrato in mg_pos_shifts. Il blocco avviene dopo il
         // replay idempotente per non far fallire le risposte gia registrate.
+        // Con turno facoltativo lo scontrino si lega comunque al turno aperto
+        // che l'app indica: lo storico per turno e la chiusura ne dipendono.
+        // With an optional shift the receipt is still tied to the open shift
+        // the app names: the per-shift history and the closing rely on it.
         $pos_shift_id = 0;
-        $pos_shift_key = '';
-        if ($this->pos_turno_obbligatorio()) {
-            $pos_shift_key = trim((string) ($body['shift_id'] ?? ''));
-            if ($pos_shift_key === '') {
-                foreach ($meta_data as $meta) {
-                    if (is_array($meta) && (string) ($meta['key'] ?? '') === '_turno_id') {
-                        $pos_shift_key = trim((string) ($meta['value'] ?? ''));
-                        break;
-                    }
+        $pos_shift_key = trim((string) ($body['shift_id'] ?? ''));
+        if ($pos_shift_key === '') {
+            foreach ($meta_data as $meta) {
+                if (is_array($meta) && (string) ($meta['key'] ?? '') === '_turno_id') {
+                    $pos_shift_key = trim((string) ($meta['value'] ?? ''));
+                    break;
                 }
             }
-            if ($pos_shift_key === '') {
-                return new WP_Error('mgws_shift_required', 'POS checkout requires an open shift (shift_id or _turno_id)', array('status' => 409));
-            }
+        }
+        $shift_required = $this->pos_turno_obbligatorio();
+        if ($pos_shift_key === '' && $shift_required) {
+            return new WP_Error('mgws_shift_required', 'POS checkout requires an open shift (shift_id or _turno_id)', array('status' => 409));
+        }
+        if ($pos_shift_key !== '') {
             if (preg_match('/^[0-9]+$/', $pos_shift_key) === 1) {
                 $pos_shift_row = MGWS_DB::get_pos_shift_by_id((int) $pos_shift_key);
             } else {
                 $pos_shift_row = MGWS_DB::get_pos_shift_by_key($pos_shift_key);
             }
-            if (!is_array($pos_shift_row)) {
+            $shift_open = is_array($pos_shift_row) && ($pos_shift_row['status'] ?? '') === 'open';
+            if ($shift_required && !is_array($pos_shift_row)) {
                 return new WP_Error('mgws_shift_not_found', 'Shift not found: open a shift from the POS before checking out', array('status' => 409));
             }
-            if (($pos_shift_row['status'] ?? '') !== 'open') {
+            if ($shift_required && !$shift_open) {
                 return new WP_Error('mgws_shift_closed', 'Shift is closed: open a new shift before checking out', array('status' => 409));
             }
-            $pos_shift_id = (int) $pos_shift_row['id'];
+            if ($shift_open) {
+                $pos_shift_id = (int) $pos_shift_row['id'];
+            }
         }
 
         $checkout_plan = $this->prepare_pos_checkout_plan($sale_items, $return_items, $site_limit);
@@ -5415,9 +5425,30 @@ public function route_pos_receipt_list(WP_REST_Request $request) {
     $business_day_id = sanitize_text_field((string) $request->get_param('business_day_id'));
     $register_name = sanitize_text_field((string) $request->get_param('register_name'));
     $operation_type = sanitize_key((string) $request->get_param('operation_type'));
+    if ($operation_type !== '') {
+        $operation_type = MGWS_DB::normalize_pos_operation_type($operation_type);
+    }
     $payment_method = sanitize_key((string) $request->get_param('payment_method'));
     $status = sanitize_key((string) $request->get_param('status'));
     $customer_id = (int) ($request->get_param('customer_id') ?: 0);
+    // Il turno arriva come shift_key (quello che l'app conosce) o come id.
+    // Un turno sconosciuto non deve allargare il filtro a tutti i documenti.
+    // The shift comes as shift_key or numeric id. An unknown shift must not
+    // widen the filter to every document.
+    $shift_ident = trim(sanitize_text_field((string) ($request->get_param('shift_id') ?? '')));
+    $shift_id = 0;
+    if ($shift_ident !== '') {
+        $shift_row = $this->resolve_pos_shift_ident($shift_ident);
+        $shift_id = is_wp_error($shift_row) ? -1 : (int) $shift_row['id'];
+    }
+    $date_from = $this->pos_receipt_date_param($request->get_param('date_from'), false);
+    $date_to = $this->pos_receipt_date_param($request->get_param('date_to'), true);
+    if (is_wp_error($date_from)) {
+        return $date_from;
+    }
+    if (is_wp_error($date_to)) {
+        return $date_to;
+    }
     $query = sanitize_text_field((string) ($request->get_param('query') ?? ''));
     $limit = (int) ($request->get_param('limit') ?: 100);
     $offset = (int) ($request->get_param('offset') ?: 0);
@@ -5451,6 +5482,18 @@ public function route_pos_receipt_list(WP_REST_Request $request) {
     if ($customer_id > 0) {
         $where[] = 'customer_id = %d';
         $params[] = $customer_id;
+    }
+    if ($shift_id !== 0) {
+        $where[] = 'shift_id = %d';
+        $params[] = $shift_id;
+    }
+    if ($date_from !== '') {
+        $where[] = 'issued_at_gmt >= %s';
+        $params[] = $date_from;
+    }
+    if ($date_to !== '') {
+        $where[] = 'issued_at_gmt <= %s';
+        $params[] = $date_to;
     }
     // La ricerca guarda cliente, progressivo e chiave documento: sono i campi
     // che l'operatore usa per ritrovare una vendita. Il confronto numerico
@@ -5492,8 +5535,11 @@ public function route_pos_receipt_list(WP_REST_Request $request) {
         . ' SUM(CASE WHEN operation_type = %s THEN 1 ELSE 0 END) AS sales_count,'
         . ' SUM(CASE WHEN operation_type = %s THEN 1 ELSE 0 END) AS returns_count,'
         . ' SUM(CASE WHEN operation_type = %s THEN 1 ELSE 0 END) AS exchanges_count,'
-        . ' COUNT(*) AS document_count FROM %i WHERE ' . $where_sql;
-    $summary = $wpdb->get_row($wpdb->prepare($summary_sql, array_merge(array('sale', 'return', 'exchange', $table), $params)), ARRAY_A); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
+        . ' COUNT(*) AS document_count FROM %i WHERE ' . $where_sql . ' AND status <> %s';
+    // I documenti annullati restano in elenco ma non entrano nei totali: un
+    // annullo non e' un incasso.
+    // Cancelled documents stay listed but never count in the totals.
+    $summary = $wpdb->get_row($wpdb->prepare($summary_sql, array_merge(array('sale', 'return', 'exchange', $table), $params, array('cancelled'))), ARRAY_A); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
 
     // Totali per metodo di pagamento: servono alla chiusura del turno, che
     // confronta atteso e contato senza rileggere ogni documento.
@@ -5502,8 +5548,8 @@ public function route_pos_receipt_list(WP_REST_Request $request) {
         . ' SUM(CASE WHEN total < 0 THEN -total ELSE 0 END) AS refunded,'
         . ' COUNT(*) AS document_count'
         . ' FROM %i WHERE ' . $where_sql
-        . " AND payment_method <> '' GROUP BY payment_method";
-    $method_rows = $wpdb->get_results($wpdb->prepare($method_sql, array_merge(array($table), $params)), ARRAY_A); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
+        . " AND status <> %s AND payment_method <> '' GROUP BY payment_method";
+    $method_rows = $wpdb->get_results($wpdb->prepare($method_sql, array_merge(array($table), $params, array('cancelled'))), ARRAY_A); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
     $by_method = array();
     if (is_array($method_rows)) {
         foreach ($method_rows as $method_row) {
@@ -5575,9 +5621,12 @@ public function route_pos_receipt_get(WP_REST_Request $request) {
     ), ARRAY_A);
 
     $payload = $this->pos_receipt_row_to_array($row);
+    $balance = MGWS_DB::get_pos_return_balance((string) $row['receipt_key']);
     $payload['lines'] = array();
     if (is_array($lines)) {
         foreach ($lines as $line) {
+            $line_key = (string) ($line['line_key'] ?? '');
+            $is_sale = ($line['movement_type'] ?? '') === 'sale';
             $payload['lines'][] = array(
                 'line_key' => (string) ($line['line_key'] ?? ''),
                 'movement_type' => (string) ($line['movement_type'] ?? ''),
@@ -5596,6 +5645,12 @@ public function route_pos_receipt_get(WP_REST_Request $request) {
                 'source_line_key' => (string) ($line['source_line_key'] ?? ''),
                 'return_reason' => (string) ($line['return_reason'] ?? ''),
                 'return_outcome' => (string) ($line['return_outcome'] ?? ''),
+                // Solo le righe vendute hanno un residuo: quelle di reso
+                // puntano a un altro documento.
+                // Only sold lines have a remainder: return lines point at
+                // another document.
+                'returned_quantity' => $is_sale ? (int) ($balance[$line_key]['returned'] ?? 0) : 0,
+                'returnable_quantity' => $is_sale ? (int) ($balance[$line_key]['returnable'] ?? 0) : 0,
             );
         }
     }
@@ -5607,6 +5662,50 @@ public function route_pos_receipt_get(WP_REST_Request $request) {
     ));
 }
 
+/**
+ * Data di filtro dello storico, in GMT come `issued_at_gmt`.
+ *
+ * Accetta `YYYY-MM-DD` (inizio o fine giornata) o un istante ISO 8601; una
+ * data senza ora vale per tutto il giorno, cosi' `date_to` include le vendite
+ * della sera.
+ * History filter date in GMT. A bare date covers the whole day, so `date_to`
+ * includes the evening sales.
+ */
+private function pos_receipt_date_param($value, $end_of_day) {
+    $value = trim(sanitize_text_field((string) ($value ?? '')));
+    if ($value === '') {
+        return '';
+    }
+    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) === 1) {
+        return $value . ($end_of_day ? ' 23:59:59' : ' 00:00:00');
+    }
+    $timestamp = strtotime($value);
+    if ($timestamp === false) {
+        return new WP_Error('mgws_bad_request', 'Invalid date filter', array('status' => 400));
+    }
+    return gmdate('Y-m-d H:i:s', $timestamp);
+}
+
+/**
+ * Chiave del turno a partire dall'id interno, con cache per richiesta.
+ *
+ * L'app riconosce il turno dalla shift_key, non dall'id del database.
+ * Shift key for an internal id, cached per request: the app knows the shift
+ * by its key, not by the database id.
+ */
+private function pos_shift_key_for_id($shift_id) {
+    static $cache = array();
+    $shift_id = (int) $shift_id;
+    if ($shift_id <= 0) {
+        return '';
+    }
+    if (!array_key_exists($shift_id, $cache)) {
+        $shift = MGWS_DB::get_pos_shift_by_id($shift_id);
+        $cache[$shift_id] = is_array($shift) ? (string) $shift['shift_key'] : '';
+    }
+    return $cache[$shift_id];
+}
+
 private function pos_receipt_row_to_array(array $row) {
     return array(
         'receipt_key' => (string) ($row['receipt_key'] ?? ''),
@@ -5616,6 +5715,7 @@ private function pos_receipt_row_to_array(array $row) {
         'status' => (string) ($row['status'] ?? ''),
         'operation_type' => (string) ($row['operation_type'] ?? ''),
         'shift_id' => (int) ($row['shift_id'] ?? 0),
+        'shift_key' => $this->pos_shift_key_for_id($row['shift_id'] ?? 0),
         'order_id' => (int) ($row['order_id'] ?? 0),
         'coupon_code' => (string) ($row['coupon_code'] ?? ''),
         'note' => (string) ($row['note'] ?? ''),
@@ -5797,6 +5897,7 @@ private function pos_closing_row_to_array(array $row) {
         'register_name' => (string) ($row['register_name'] ?? ''),
         'location' => (string) ($row['location'] ?? ''),
         'shift_id' => (int) ($row['shift_id'] ?? 0),
+        'shift_key' => $this->pos_shift_key_for_id($row['shift_id'] ?? 0),
         'operator_id' => (int) ($row['operator_id'] ?? 0),
         'operator_name' => (string) ($row['operator_name'] ?? ''),
         'opening_float' => (float) ($row['opening_float'] ?? 0),
@@ -5824,7 +5925,7 @@ private function pos_closing_row_to_array(array $row) {
     );
 }
 
-private function validate_pos_receipt_status($value) {
+public function validate_pos_receipt_status($value) {
     return in_array(
         (string) $value,
         array('paid', 'cancelled', 'refunded'),
@@ -6766,6 +6867,7 @@ private function resolve_pos_shift_ident($ident) {
                 'variation_id' => $variation_id,
                 'quantity' => $qty,
                 'sku' => sanitize_text_field((string) ($item['sku'] ?? '')),
+                'barcode' => sanitize_text_field((string) ($item['barcode'] ?? '')),
                 'name' => sanitize_text_field((string) ($item['name'] ?? '')),
                 'unit_price' => (float) ($item['unit_price'] ?? 0),
                 'subtotal' => (float) ($item['subtotal'] ?? 0),
@@ -6782,6 +6884,7 @@ private function resolve_pos_shift_ident($ident) {
     }
 
     private function validate_pos_return_references($return_items) {
+        $requested_by_line = array();
         foreach ($return_items as $item) {
             $source_sale_id = trim((string) ($item['source_sale_id'] ?? ''));
             $source_line_key = trim((string) ($item['source_line_key'] ?? ''));
@@ -6793,6 +6896,29 @@ private function resolve_pos_shift_ident($ident) {
             }
             if (trim((string) ($item['return_reason'] ?? '')) === '') {
                 return new WP_Error('mgws_bad_request', 'Return reason is required for referenced returns', array('status' => 400));
+            }
+
+            // Il documento registrato in mg_pos_receipts e' la fonte del
+            // residuo: lo stesso numero che l'app mostra nel dettaglio. Le
+            // righe dello stesso reso si sommano, cosi' due righe da 1 non
+            // superano un residuo di 1.
+            // The recorded document is the source of the remainder, the same
+            // number the app shows. Lines of the same return add up.
+            $source_receipt = MGWS_DB::get_pos_receipt_by_key($source_sale_id);
+            if (is_array($source_receipt)) {
+                if (($source_receipt['status'] ?? '') === 'cancelled') {
+                    return new WP_Error('mgws_return_source_cancelled', 'Source sale is cancelled', array('status' => 409));
+                }
+                $balance = MGWS_DB::get_pos_return_balance($source_sale_id);
+                if (!isset($balance[$source_line_key])) {
+                    return new WP_Error('mgws_return_line_not_found', 'Source sale line not found for return', array('status' => 404));
+                }
+                $identity = $source_sale_id . '|' . $source_line_key;
+                $requested_by_line[$identity] = ($requested_by_line[$identity] ?? 0) + (int) ($item['quantity'] ?? 0);
+                if ($requested_by_line[$identity] > (int) $balance[$source_line_key]['returnable']) {
+                    return new WP_Error('mgws_return_over_limit', 'Return quantity exceeds remaining quantity', array('status' => 409));
+                }
+                continue;
             }
 
             $origin = $this->find_pos_order_by_local_receipt_id($source_sale_id);

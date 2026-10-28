@@ -13,7 +13,7 @@ class MGWS_Plugin {
     private static $instance = null;
     private const CAPS_VERSION_OPTION = 'mgws_caps_version';
     private const DB_SCHEMA_VERSION_OPTION = 'mgws_db_schema_version';
-    private const DB_SCHEMA_VERSION = '10';
+    private const DB_SCHEMA_VERSION = '11';
 
     /**
      * When enabled, MGWS is the single source of truth for stock and
@@ -34,6 +34,7 @@ class MGWS_Plugin {
 
     public static function activate() {
         MGWS_DB::create_or_update_tables();
+        MGWS_DB::normalize_pos_document_types();
         update_option(self::DB_SCHEMA_VERSION_OPTION, self::DB_SCHEMA_VERSION);
         self::ensure_role_capabilities();
         update_option(self::CAPS_VERSION_OPTION, MGWS_PLUGIN_VERSION);
@@ -112,6 +113,8 @@ class MGWS_Plugin {
             return;
         }
         MGWS_DB::create_or_update_tables();
+        // Schema 11: tipi documento e riga POS in forma canonica.
+        MGWS_DB::normalize_pos_document_types();
         update_option(self::DB_SCHEMA_VERSION_OPTION, self::DB_SCHEMA_VERSION);
     }
 

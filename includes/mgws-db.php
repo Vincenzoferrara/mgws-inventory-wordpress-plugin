@@ -1850,7 +1850,7 @@ public static function issue_pos_receipt(array $row) {
         'register_name' => $register_name,
         'sequential_number' => $sequential_number,
         'status' => (string) ($row['status'] ?? 'paid'),
-        'operation_type' => (string) ($row['operation_type'] ?? 'sale'),
+        'operation_type' => self::normalize_pos_operation_type($row['operation_type'] ?? 'sale'),
             'shift_id' => !empty($row['shift_id']) ? (int) $row['shift_id'] : null,
         'order_id' => (int) ($row['order_id'] ?? 0),
         'idempotency_key' => (string) ($row['idempotency_key'] ?? ''),
@@ -2174,7 +2174,7 @@ public static function save_pos_receipt_lines($receipt_id, array $lines) {
         $ok = $wpdb->insert($table, array(
             'receipt_id' => (int) $receipt_id,
             'line_key' => (string) ($line['line_key'] ?? ''),
-            'movement_type' => (string) ($line['movement_type'] ?? 'sale'),
+            'movement_type' => self::normalize_pos_movement_type($line['movement_type'] ?? 'sale'),
             'product_id' => (int) ($line['product_id'] ?? 0),
             'variation_id' => (int) ($line['variation_id'] ?? 0),
             'sku' => (string) ($line['sku'] ?? ''),
@@ -2200,39 +2200,93 @@ public static function save_pos_receipt_lines($receipt_id, array $lines) {
 }
 
 /**
+ * Tipo operazione canonico del documento: `sale`, `return` o `exchange`.
+ *
+ * L'app invia i valori italiani (`vendita`, `reso`, `cambio`): se finissero
+ * in tabella cosi' come sono, i filtri, il residuo rendibile e i report che
+ * cercano i valori inglesi non troverebbero nulla.
+ * Canonical document operation type. The app sends Italian values; stored
+ * unchanged they would never match the filters, the returnable remainder or
+ * the reports.
+ */
+public static function normalize_pos_operation_type($value) {
+    $value = sanitize_key((string) $value);
+    switch ($value) {
+        case 'reso':
+        case 'return':
+            return 'return';
+        case 'cambio':
+        case 'exchange':
+            return 'exchange';
+        default:
+            return 'sale';
+    }
+}
+
+/**
+ * Tipo movimento canonico della riga: `sale` o `return`.
+ * Canonical line movement type: `sale` or `return`.
+ */
+public static function normalize_pos_movement_type($value) {
+    $value = sanitize_key((string) $value);
+    return ($value === 'reso' || $value === 'return') ? 'return' : 'sale';
+}
+
+/**
+ * Porta ai valori canonici i documenti registrati prima della normalizzazione.
+ *
+ * Senza questa migrazione gli scontrini gia' emessi resterebbero con
+ * `vendita`/`reso`/`cambio` e il loro residuo rendibile risulterebbe vuoto.
+ * Rewrites documents recorded before normalization to the canonical values,
+ * otherwise their returnable remainder would stay empty.
+ */
+public static function normalize_pos_document_types() {
+    global $wpdb;
+    $receipts = self::table_pos_receipts();
+    $lines = self::table_pos_receipt_lines();
+    $wpdb->query($wpdb->prepare('UPDATE %i SET operation_type = %s WHERE operation_type = %s', $receipts, 'sale', 'vendita'));
+    $wpdb->query($wpdb->prepare('UPDATE %i SET operation_type = %s WHERE operation_type = %s', $receipts, 'return', 'reso'));
+    $wpdb->query($wpdb->prepare('UPDATE %i SET operation_type = %s WHERE operation_type = %s', $receipts, 'exchange', 'cambio'));
+    $wpdb->query($wpdb->prepare('UPDATE %i SET movement_type = %s WHERE movement_type = %s', $lines, 'sale', 'vendita'));
+    $wpdb->query($wpdb->prepare('UPDATE %i SET movement_type = %s WHERE movement_type = %s', $lines, 'return', 'reso'));
+}
+
+/**
  * Restituisce le righe vendute di un documento, per il controllo dei resi.
- * Returns the sold lines of a document, for return validation.
+ *
+ * Un documento annullato non ha nulla da rendere, quindi non restituisce
+ * righe.
+ * Returns the sold lines of a document, for return validation. A cancelled
+ * document has nothing left to return.
  */
 public static function get_pos_receipt_sold_lines($receipt_key) {
     global $wpdb;
-    // Gli apici espliciti evitano che i segnaposto diventino letterali senza
-    // virgolette e rompano l'IN.
-    // Explicit quoting keeps the placeholders from becoming unquoted literals
-    // and breaking the IN clause.
     $rows = $wpdb->get_results($wpdb->prepare(
         'SELECT rl.* FROM %i rl'
         . ' INNER JOIN %i r ON r.id = rl.receipt_id'
-        . " WHERE r.receipt_key = %s AND r.operation_type IN ('sale', 'exchange')",
+        . ' WHERE r.receipt_key = %s AND r.status <> %s AND rl.movement_type = %s',
         self::table_pos_receipt_lines(),
         self::table_pos_receipts(),
-        (string) $receipt_key
+        (string) $receipt_key,
+        'cancelled',
+        'sale'
     ), ARRAY_A);
     return is_array($rows) ? $rows : array();
 }
 
 /**
- * Quanto e' ancora rendibile su ogni riga venduta di un documento.
+ * Quantita' venduta, gia' resa e ancora rendibile per ogni riga venduta.
  *
- * Restituisce `line_key => quantita` per le righe con residuo, cosi' il
- * cliente vede gli stessi numeri che il server ha calcolato. La quantita'
- * gia' restituita e' la somma dei resi che puntano a quella riga: e il
- * server a tenere il conto, perche' il dispositivo puo' perdersi.
+ * Restituisce `line_key => array(sold, returned, returnable)`. Il reso si
+ * conta dalle righe di reso che puntano a questo documento, escluse quelle
+ * di documenti annullati: e' il server a tenere il conto, perche' il
+ * dispositivo puo' perdersi e i resi possono arrivare da piu' casse.
  *
- * Returns how much is still returnable per sold line. Already-returned
- * quantities come from the returns recorded server-side, because the device
- * can be lost.
+ * Returns sold, returned and returnable quantities per sold line. Returns are
+ * counted from the return lines pointing at this document, cancelled
+ * documents excluded, so the count survives the device and covers every till.
  */
-public static function get_pos_returnable_quantities($receipt_key) {
+public static function get_pos_return_balance($receipt_key) {
     global $wpdb;
 
     $sold = self::get_pos_receipt_sold_lines($receipt_key);
@@ -2240,31 +2294,22 @@ public static function get_pos_returnable_quantities($receipt_key) {
         return array();
     }
 
-    // Le righe vendute di un documento sono gia' al netto delle righe di reso
-    // dello stesso documento, quindi si contano solo quelle col movement_type
-    // 'vendita': cosi' un cambio non torna due volte nel totale.
     $sold_by_key = array();
     foreach ($sold as $line) {
         $line_key = (string) $line['line_key'];
-        $movement = (string) ($line['movement_type'] ?? '');
-        $quantity = (int) $line['quantity'];
-        if ($movement === 'return') {
-            // Un reso dentro il documento di origine riduce il venduto.
-            $sold_by_key[$line_key] = ($sold_by_key[$line_key] ?? 0) - abs($quantity);
-            continue;
-        }
-        $sold_by_key[$line_key] = ($sold_by_key[$line_key] ?? 0) + $quantity;
+        $sold_by_key[$line_key] = ($sold_by_key[$line_key] ?? 0) + abs((int) $line['quantity']);
     }
 
     $returns = $wpdb->get_results($wpdb->prepare(
         'SELECT rl.source_line_key, SUM(ABS(rl.quantity)) AS returned_quantity FROM %i rl'
         . ' INNER JOIN %i r ON r.id = rl.receipt_id'
-        . ' WHERE rl.movement_type = %s AND rl.source_receipt_key = %s'
+        . ' WHERE rl.movement_type = %s AND rl.source_receipt_key = %s AND r.status <> %s'
         . ' GROUP BY rl.source_line_key',
         self::table_pos_receipt_lines(),
         self::table_pos_receipts(),
         'return',
-        (string) $receipt_key
+        (string) $receipt_key,
+        'cancelled'
     ), ARRAY_A);
 
     $returned_by_key = array();
@@ -2276,9 +2321,27 @@ public static function get_pos_returnable_quantities($receipt_key) {
 
     $result = array();
     foreach ($sold_by_key as $line_key => $quantity) {
-        $remaining = $quantity - (int) ($returned_by_key[$line_key] ?? 0);
-        if ($remaining > 0) {
-            $result[$line_key] = $remaining;
+        $returned = (int) ($returned_by_key[$line_key] ?? 0);
+        $result[$line_key] = array(
+            'sold' => $quantity,
+            'returned' => $returned,
+            'returnable' => max(0, $quantity - $returned),
+        );
+    }
+    return $result;
+}
+
+/**
+ * Quanto e' ancora rendibile su ogni riga venduta di un documento.
+ *
+ * Restituisce `line_key => quantita` per le sole righe con residuo.
+ * Returns `line_key => quantity` for the lines that still have a remainder.
+ */
+public static function get_pos_returnable_quantities($receipt_key) {
+    $result = array();
+    foreach (self::get_pos_return_balance($receipt_key) as $line_key => $balance) {
+        if ($balance['returnable'] > 0) {
+            $result[$line_key] = $balance['returnable'];
         }
     }
     return $result;
