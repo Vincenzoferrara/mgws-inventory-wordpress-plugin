@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: MG Warehouse Stock 2.4.0\n"
 "Report-Msgid-Bugs-To: https://github.com/Vincenzoferrara/mg-warehouse-stock/issues\n"
-"POT-Creation-Date: 2026-10-25 22:28+0000\n"
+"POT-Creation-Date: 2026-10-28 06:07+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -28,7 +28,7 @@ msgstr ""
 msgid "(%s: %s)"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:2220
+#: includes/class-mgws-plugin.php:2223
 msgid "(All)"
 msgstr ""
 
@@ -48,7 +48,7 @@ msgstr ""
 msgid "+ Shelf"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:235
+#: includes/class-mgws-plugin.php:238
 msgid "+ Site"
 msgstr ""
 
@@ -56,15 +56,15 @@ msgstr ""
 msgid "+ Warehouse"
 msgstr ""
 
-#: assets/admin-product.js:479 includes/class-mgws-plugin.php:2186 includes/class-mgws-plugin.php:371
+#: assets/admin-product.js:479 includes/class-mgws-plugin.php:2189 includes/class-mgws-plugin.php:374
 msgid "-- select --"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:497
+#: includes/class-mgws-plugin.php:500
 msgid "Accept order"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:413
+#: includes/class-mgws-plugin.php:416
 #, php-format
 msgid "Accepted <span class=\"count\">(%s)</span>"
 msgid_plural "Accepted <span class=\"count\">(%s)</span>"
@@ -75,7 +75,7 @@ msgstr[1] ""
 msgid "Allocated:"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1284
+#: includes/class-mgws-plugin.php:1287
 msgid "Allocation is outside your assigned site"
 msgstr ""
 
@@ -91,26 +91,26 @@ msgstr ""
 msgid "Cancel"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1793
+#: includes/class-mgws-plugin.php:1796
 #, php-format
 msgid "Cannot delete: linked to %d warehouses"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:2040
+#: includes/class-mgws-plugin.php:2043
 #, php-format
 msgid "Cannot delete: site is in use (levels=%1$d, movements=%2$d)"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:2029
+#: includes/class-mgws-plugin.php:2032
 msgid "Cannot delete: the site still has warehouses"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1805
+#: includes/class-mgws-plugin.php:1808
 #, php-format
 msgid "Cannot delete: used by %d stock levels"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1985
+#: includes/class-mgws-plugin.php:1988
 #, php-format
 msgid "Cannot delete: warehouse is in use (levels=%1$d, movements=%2$d)"
 msgstr ""
@@ -119,51 +119,51 @@ msgstr ""
 msgid "Close"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:239
+#: includes/class-mgws-plugin.php:242
 msgid "Collapse"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:632
+#: includes/class-mgws-plugin.php:635
 msgid "Copy default to empty"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1526
+#: includes/class-mgws-plugin.php:1529
 msgid "Could not create the site"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1558
+#: includes/class-mgws-plugin.php:1561
 msgid "Could not create the warehouse"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:2049
+#: includes/class-mgws-plugin.php:2052
 msgid "Could not delete the site"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1994
+#: includes/class-mgws-plugin.php:1997
 msgid "Could not delete the warehouse"
 msgstr ""
 
-#: includes/class-mgws-rest-api.php:4014
+#: includes/class-mgws-rest-api.php:4017
 msgid "Could not record the entry into the destination warehouse"
 msgstr ""
 
-#: includes/class-mgws-rest-api.php:5123
+#: includes/class-mgws-rest-api.php:5133
 msgid "Could not record the incoming movement"
 msgstr ""
 
-#: includes/class-mgws-rest-api.php:5111
+#: includes/class-mgws-rest-api.php:5121
 msgid "Could not record the outgoing movement"
 msgstr ""
 
-#: includes/class-mgws-rest-api.php:5129
+#: includes/class-mgws-rest-api.php:5139
 msgid "Could not record the return"
 msgstr ""
 
-#: includes/mgws-db.php:3711
+#: includes/mgws-db.php:3774
 msgid "Could not save the movement"
 msgstr ""
 
-#: includes/mgws-db.php:3106 includes/mgws-db.php:3473
+#: includes/mgws-db.php:3169 includes/mgws-db.php:3536
 msgid "Could not write the stock level"
 msgstr ""
 
@@ -171,19 +171,19 @@ msgstr ""
 msgid "Create a new site."
 msgstr ""
 
-#: includes/class-mgws-plugin.php:543
+#: includes/class-mgws-plugin.php:546
 msgid "Default location"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:550
+#: includes/class-mgws-plugin.php:553
 msgid "Default location not set."
 msgstr ""
 
-#: includes/class-mgws-plugin.php:626
+#: includes/class-mgws-plugin.php:629
 msgid "Default location per variation"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:2218
+#: includes/class-mgws-plugin.php:2221
 msgid "Default site"
 msgstr ""
 
@@ -230,7 +230,7 @@ msgstr ""
 msgid "Deleting..."
 msgstr ""
 
-#: includes/class-mgws-plugin.php:2151
+#: includes/class-mgws-plugin.php:2154
 msgid "Destination is outside your assigned site"
 msgstr ""
 
@@ -254,15 +254,15 @@ msgstr ""
 msgid "Enter a value"
 msgstr ""
 
-#: assets/admin-masterdata.js:450 assets/admin-masterdata.js:500 assets/admin-masterdata.js:530 assets/admin-masterdata.js:592 assets/admin-masterdata.js:637 assets/admin-masterdata.js:751 assets/admin-masterdata.js:783 assets/admin-masterdata.js:802 assets/admin-masterdata.js:828 assets/admin-order.js:185 assets/admin-order.js:229 assets/admin-product.js:574 assets/admin-product.js:622 assets/admin-product.js:709 includes/class-mgws-plugin.php:1813 includes/class-mgws-plugin.php:1930 includes/class-mgws-plugin.php:1957 includes/class-mgws-plugin.php:2102 includes/class-mgws-plugin.php:2116 includes/class-mgws-plugin.php:2129 includes/class-mgws-plugin.php:2159 includes/class-mgws-plugin.php:2164
+#: assets/admin-masterdata.js:450 assets/admin-masterdata.js:500 assets/admin-masterdata.js:530 assets/admin-masterdata.js:592 assets/admin-masterdata.js:637 assets/admin-masterdata.js:751 assets/admin-masterdata.js:783 assets/admin-masterdata.js:802 assets/admin-masterdata.js:828 assets/admin-order.js:185 assets/admin-order.js:229 assets/admin-product.js:574 assets/admin-product.js:622 assets/admin-product.js:709 includes/class-mgws-plugin.php:1816 includes/class-mgws-plugin.php:1933 includes/class-mgws-plugin.php:1960 includes/class-mgws-plugin.php:2105 includes/class-mgws-plugin.php:2119 includes/class-mgws-plugin.php:2132 includes/class-mgws-plugin.php:2162 includes/class-mgws-plugin.php:2167
 msgid "Error"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:238
+#: includes/class-mgws-plugin.php:241
 msgid "Expand"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:631
+#: includes/class-mgws-plugin.php:634
 msgid "Filter variations..."
 msgstr ""
 
@@ -270,31 +270,31 @@ msgstr ""
 msgid "In this warehouse:"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:2148
+#: includes/class-mgws-plugin.php:2151
 msgid "Invalid destination"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1668 includes/mgws-db.php:107
+#: includes/class-mgws-plugin.php:1671 includes/mgws-db.php:107
 msgid "Invalid field"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:2174
+#: includes/class-mgws-plugin.php:2177
 msgid "Invalid operation"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1085 includes/class-mgws-plugin.php:1226
+#: includes/class-mgws-plugin.php:1088 includes/class-mgws-plugin.php:1229
 msgid "Invalid order"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1238
+#: includes/class-mgws-plugin.php:1241
 msgid "Invalid payload"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1012 includes/class-mgws-plugin.php:1048 includes/class-mgws-plugin.php:1068
+#: includes/class-mgws-plugin.php:1015 includes/class-mgws-plugin.php:1051 includes/class-mgws-plugin.php:1071
 msgid "Invalid product"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:516
+#: includes/class-mgws-plugin.php:519
 msgid "Invalid product."
 msgstr ""
 
@@ -306,19 +306,19 @@ msgstr ""
 msgid "Invalid room"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1079 includes/class-mgws-plugin.php:1220 includes/class-mgws-plugin.php:1417 includes/class-mgws-plugin.php:1571 includes/class-mgws-plugin.php:1846 includes/class-mgws-plugin.php:1854 includes/class-mgws-plugin.php:1861 includes/class-mgws-plugin.php:1870 includes/class-mgws-plugin.php:2060
+#: includes/class-mgws-plugin.php:1082 includes/class-mgws-plugin.php:1223 includes/class-mgws-plugin.php:1420 includes/class-mgws-plugin.php:1574 includes/class-mgws-plugin.php:1849 includes/class-mgws-plugin.php:1857 includes/class-mgws-plugin.php:1864 includes/class-mgws-plugin.php:1873 includes/class-mgws-plugin.php:2063
 msgid "Invalid security token"
 msgstr ""
 
-#: assets/admin-masterdata.js:518 includes/class-mgws-plugin.php:1650 includes/class-mgws-plugin.php:1768 includes/class-mgws-plugin.php:2006 includes/mgws-db.php:63
+#: assets/admin-masterdata.js:518 includes/class-mgws-plugin.php:1653 includes/class-mgws-plugin.php:1771 includes/class-mgws-plugin.php:2009 includes/mgws-db.php:63
 msgid "Invalid site"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1058
+#: includes/class-mgws-plugin.php:1061
 msgid "Invalid variation"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1969 includes/class-mgws-plugin.php:2086 includes/mgws-db.php:385
+#: includes/class-mgws-plugin.php:1972 includes/class-mgws-plugin.php:2089 includes/mgws-db.php:385
 msgid "Invalid warehouse"
 msgstr ""
 
@@ -334,7 +334,7 @@ msgstr ""
 msgid "Linked"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:494
+#: includes/class-mgws-plugin.php:497
 msgid "Load availability"
 msgstr ""
 
@@ -346,11 +346,11 @@ msgstr ""
 msgid "Location"
 msgstr ""
 
-#: includes/mgws-db.php:3067 includes/mgws-db.php:3428 includes/mgws-db.php:3665
+#: includes/mgws-db.php:3130 includes/mgws-db.php:3491 includes/mgws-db.php:3728
 msgid "Location is not linked to this warehouse. Link the shelves in WooCommerce → Warehouse."
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1925
+#: includes/class-mgws-plugin.php:1928
 msgid "Location not found in the site structure"
 msgstr ""
 
@@ -358,15 +358,15 @@ msgstr ""
 msgid "Locations linked to the warehouse"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:150
+#: includes/class-mgws-plugin.php:153
 msgid "MG Warehouse Stock needs WooCommerce to be installed and active. Warehouse levels, purchase orders and the point of sale stay unavailable until it is."
 msgstr ""
 
-#: includes/class-mgws-plugin.php:609
+#: includes/class-mgws-plugin.php:612
 msgid "Manage sites, warehouses and locations"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:229
+#: includes/class-mgws-plugin.php:232
 msgid "Manage the location tree: Site → Warehouse → Room → Rack → Shelf."
 msgstr ""
 
@@ -374,7 +374,7 @@ msgstr ""
 msgid "Missing context"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1543 includes/class-mgws-plugin.php:1640 includes/class-mgws-plugin.php:1760 includes/class-mgws-plugin.php:1908 includes/class-mgws-plugin.php:1946 includes/mgws-db.php:446
+#: includes/class-mgws-plugin.php:1546 includes/class-mgws-plugin.php:1643 includes/class-mgws-plugin.php:1763 includes/class-mgws-plugin.php:1911 includes/class-mgws-plugin.php:1949 includes/mgws-db.php:446
 msgid "Missing data"
 msgstr ""
 
@@ -398,7 +398,7 @@ msgstr ""
 msgid "Missing:"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:645
+#: includes/class-mgws-plugin.php:648
 msgid "Name"
 msgstr ""
 
@@ -434,7 +434,7 @@ msgstr ""
 msgid "No link set: in this state the warehouse still sees every location of the site. To restrict it, link at least one room, rack or shelf."
 msgstr ""
 
-#: includes/mgws-db.php:2946
+#: includes/mgws-db.php:3009
 msgid "No location"
 msgstr ""
 
@@ -466,43 +466,43 @@ msgstr ""
 msgid "No site or warehouse configured."
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1307
+#: includes/class-mgws-plugin.php:1310
 msgid "Not enough stock for every order line"
 msgstr ""
 
-#: includes/class-mgws-rest-api.php:4009
+#: includes/class-mgws-rest-api.php:4012
 msgid "Not enough stock in the source warehouse"
 msgstr ""
 
-#: includes/mgws-db.php:3476
+#: includes/mgws-db.php:3539
 msgid "Not enough stock, or no such stock level"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1912
+#: includes/class-mgws-plugin.php:1915
 msgid "Only shelf links are allowed here"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1369
+#: includes/class-mgws-plugin.php:1372
 msgid "Order accepted"
 msgstr ""
 
-#: includes/class-mgws-rest-api.php:4871
+#: includes/class-mgws-rest-api.php:4874
 msgid "Order accepted (API)."
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1358
+#: includes/class-mgws-plugin.php:1361
 msgid "Order accepted."
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1231
+#: includes/class-mgws-plugin.php:1234
 msgid "Order already accepted"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:492
+#: includes/class-mgws-plugin.php:495
 msgid "Order already accepted."
 msgstr ""
 
-#: includes/class-mgws-plugin.php:544
+#: includes/class-mgws-plugin.php:547
 msgid "Order: Site → Warehouse → Room → Rack → Shelf. To add or remove locations, go to WooCommerce → Warehouse."
 msgstr ""
 
@@ -510,7 +510,7 @@ msgstr ""
 msgid "Pick"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:453
+#: includes/class-mgws-plugin.php:456
 msgid "Picking / Acceptance"
 msgstr ""
 
@@ -518,15 +518,15 @@ msgstr ""
 msgid "Priority"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:662
+#: includes/class-mgws-plugin.php:665
 msgid "Product"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1409
+#: includes/class-mgws-plugin.php:1412
 msgid "Product #"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1016
+#: includes/class-mgws-plugin.php:1019
 msgid "Product not found"
 msgstr ""
 
@@ -534,19 +534,19 @@ msgstr ""
 msgid "Product not fully available. Do you want to continue?"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:615 includes/class-mgws-plugin.php:647
+#: includes/class-mgws-plugin.php:618 includes/class-mgws-plugin.php:650
 msgid "Purchase cost"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:2096
+#: includes/class-mgws-plugin.php:2099
 msgid "Quantity must be 0 or more"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:2112 includes/class-mgws-plugin.php:2125 includes/class-mgws-plugin.php:2138
+#: includes/class-mgws-plugin.php:2115 includes/class-mgws-plugin.php:2128 includes/class-mgws-plugin.php:2141
 msgid "Quantity must be greater than 0"
 msgstr ""
 
-#: assets/admin-masterdata.js:260 assets/admin-masterdata.js:551 assets/admin-product.js:672 assets/admin-product.js:692 includes/class-mgws-plugin.php:597 includes/class-mgws-plugin.php:652
+#: assets/admin-masterdata.js:260 assets/admin-masterdata.js:551 assets/admin-product.js:672 assets/admin-product.js:692 includes/class-mgws-plugin.php:600 includes/class-mgws-plugin.php:655
 msgid "Rack"
 msgstr ""
 
@@ -559,7 +559,7 @@ msgstr ""
 msgid "Rack: %s"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:233
+#: includes/class-mgws-plugin.php:236
 msgid "Reload"
 msgstr ""
 
@@ -583,11 +583,11 @@ msgstr ""
 msgid "Required:"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:633
+#: includes/class-mgws-plugin.php:636
 msgid "Reset columns"
 msgstr ""
 
-#: assets/admin-masterdata.js:256 assets/admin-masterdata.js:549 assets/admin-product.js:670 assets/admin-product.js:683 assets/admin-product.js:690 includes/class-mgws-plugin.php:593 includes/class-mgws-plugin.php:651
+#: assets/admin-masterdata.js:256 assets/admin-masterdata.js:549 assets/admin-product.js:670 assets/admin-product.js:683 assets/admin-product.js:690 includes/class-mgws-plugin.php:596 includes/class-mgws-plugin.php:654
 msgid "Room"
 msgstr ""
 
@@ -609,7 +609,7 @@ msgstr ""
 msgid "Save"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:634
+#: includes/class-mgws-plugin.php:637
 msgid "Save the product to confirm."
 msgstr ""
 
@@ -625,23 +625,23 @@ msgstr ""
 msgid "Saving..."
 msgstr ""
 
-#: includes/class-mgws-plugin.php:237
+#: includes/class-mgws-plugin.php:240
 msgid "Search (site, warehouse, room...)"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:2141
+#: includes/class-mgws-plugin.php:2144
 msgid "Select a destination warehouse"
 msgstr ""
 
-#: assets/admin-masterdata.js:736 includes/class-mgws-plugin.php:1915
+#: assets/admin-masterdata.js:736 includes/class-mgws-plugin.php:1918
 msgid "Select a rack and a shelf"
 msgstr ""
 
-#: assets/admin-product.js:664 includes/class-mgws-plugin.php:1676 includes/class-mgws-plugin.php:1783
+#: assets/admin-product.js:664 includes/class-mgws-plugin.php:1679 includes/class-mgws-plugin.php:1786
 msgid "Select a room and a rack first"
 msgstr ""
 
-#: assets/admin-product.js:656 includes/class-mgws-plugin.php:1673 includes/class-mgws-plugin.php:1780
+#: assets/admin-product.js:656 includes/class-mgws-plugin.php:1676 includes/class-mgws-plugin.php:1783
 msgid "Select a room first"
 msgstr ""
 
@@ -657,11 +657,11 @@ msgstr ""
 msgid "Select at least one room"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:627
+#: includes/class-mgws-plugin.php:630
 msgid "Set Site / Warehouse / Room / Rack / Shelf for each variation. All fields are optional."
 msgstr ""
 
-#: assets/admin-masterdata.js:264 assets/admin-masterdata.js:552 assets/admin-product.js:673 includes/class-mgws-plugin.php:601 includes/class-mgws-plugin.php:653
+#: assets/admin-masterdata.js:264 assets/admin-masterdata.js:552 assets/admin-product.js:673 includes/class-mgws-plugin.php:604 includes/class-mgws-plugin.php:656
 msgid "Shelf"
 msgstr ""
 
@@ -669,11 +669,11 @@ msgstr ""
 msgid "Single shelf"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:2178 includes/class-mgws-plugin.php:577 includes/class-mgws-plugin.php:649 includes/class-mgws-rest-api.php:712
+#: includes/class-mgws-plugin.php:2181 includes/class-mgws-plugin.php:580 includes/class-mgws-plugin.php:652 includes/class-mgws-rest-api.php:715
 msgid "Site"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1139 includes/class-mgws-plugin.php:579 includes/class-mgws-plugin.php:719
+#: includes/class-mgws-plugin.php:1142 includes/class-mgws-plugin.php:582 includes/class-mgws-plugin.php:722
 msgid "Site #"
 msgstr ""
 
@@ -685,7 +685,7 @@ msgstr ""
 msgid "Site deleted"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1653 includes/class-mgws-plugin.php:1771 includes/class-mgws-plugin.php:2011
+#: includes/class-mgws-plugin.php:1656 includes/class-mgws-plugin.php:1774 includes/class-mgws-plugin.php:2014
 msgid "Site is outside your assigned site"
 msgstr ""
 
@@ -693,7 +693,7 @@ msgstr ""
 msgid "Site name"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1516
+#: includes/class-mgws-plugin.php:1519
 msgid "Site name is missing"
 msgstr ""
 
@@ -702,31 +702,31 @@ msgstr ""
 msgid "Site: %s"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:2144
+#: includes/class-mgws-plugin.php:2147
 msgid "Source and destination warehouse must be different"
 msgstr ""
 
-#: includes/mgws-db.php:3689
+#: includes/mgws-db.php:3752
 msgid "Stock changed or is no longer sufficient, reload and try again"
 msgstr ""
 
-#: includes/class-mgws-rest-api.php:5106
+#: includes/class-mgws-rest-api.php:5116
 msgid "Stock ran out or changed during checkout"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:2120
+#: includes/class-mgws-plugin.php:2123
 msgid "Stock-in recorded"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:2133
+#: includes/class-mgws-plugin.php:2136
 msgid "Stock-out recorded"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:477
+#: includes/class-mgws-plugin.php:480
 msgid "The order could not be loaded."
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1511
+#: includes/class-mgws-plugin.php:1514
 msgid "This user is limited to one site and cannot create new ones"
 msgstr ""
 
@@ -746,7 +746,7 @@ msgstr ""
 msgid "Total required:"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:2171
+#: includes/class-mgws-plugin.php:2174
 msgid "Transfer recorded"
 msgstr ""
 
@@ -754,7 +754,7 @@ msgstr ""
 msgid "Unlink"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:2107
+#: includes/class-mgws-plugin.php:2110
 msgid "Updated"
 msgstr ""
 
@@ -762,19 +762,19 @@ msgstr ""
 msgid "Values were copied to the interface only. Save the product to confirm."
 msgstr ""
 
-#: includes/class-mgws-plugin.php:648
+#: includes/class-mgws-plugin.php:651
 msgid "Variation"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1061
+#: includes/class-mgws-plugin.php:1064
 msgid "Variation does not belong to this product"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:214 includes/class-mgws-plugin.php:215 includes/class-mgws-plugin.php:2216 includes/class-mgws-plugin.php:228 includes/class-mgws-plugin.php:267 includes/class-mgws-plugin.php:589 includes/class-mgws-plugin.php:650 includes/class-mgws-rest-api.php:737
+#: includes/class-mgws-plugin.php:217 includes/class-mgws-plugin.php:218 includes/class-mgws-plugin.php:2219 includes/class-mgws-plugin.php:231 includes/class-mgws-plugin.php:270 includes/class-mgws-plugin.php:592 includes/class-mgws-plugin.php:653 includes/class-mgws-rest-api.php:740
 msgid "Warehouse"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1146
+#: includes/class-mgws-plugin.php:1149
 msgid "Warehouse #"
 msgstr ""
 
@@ -786,11 +786,11 @@ msgstr ""
 msgid "Warehouse deleted"
 msgstr ""
 
-#: includes/mgws-db.php:3063 includes/mgws-db.php:3424
+#: includes/mgws-db.php:3126 includes/mgws-db.php:3487
 msgid "Warehouse has no site"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1494 includes/class-mgws-plugin.php:1921 includes/class-mgws-plugin.php:1952 includes/class-mgws-plugin.php:1975 includes/class-mgws-plugin.php:2089
+#: includes/class-mgws-plugin.php:1497 includes/class-mgws-plugin.php:1924 includes/class-mgws-plugin.php:1955 includes/class-mgws-plugin.php:1978 includes/class-mgws-plugin.php:2092
 msgid "Warehouse is outside your assigned site"
 msgstr ""
 
@@ -803,12 +803,12 @@ msgstr ""
 msgid "Warehouse: %s"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1362 includes/class-mgws-rest-api.php:4875
+#: includes/class-mgws-plugin.php:1365 includes/class-mgws-rest-api.php:4878
 #, php-format
 msgid "Warning: not enough stock for %d units."
 msgstr ""
 
-#: includes/class-mgws-plugin.php:2225
+#: includes/class-mgws-plugin.php:2228
 msgid "When set, limits the user to a single site."
 msgstr ""
 
@@ -820,15 +820,15 @@ msgstr ""
 msgid "Whole room"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:615
+#: includes/class-mgws-plugin.php:618
 msgid "WooCommerce `_purchase_cost` meta, also updated by supplier receipts."
 msgstr ""
 
-#: includes/class-mgws-plugin.php:1076 includes/class-mgws-plugin.php:1217 includes/class-mgws-plugin.php:1414 includes/class-mgws-plugin.php:1457 includes/class-mgws-plugin.php:1482 includes/class-mgws-plugin.php:1504 includes/class-mgws-plugin.php:1535 includes/class-mgws-plugin.php:1568 includes/class-mgws-plugin.php:1626 includes/class-mgws-plugin.php:1747 includes/class-mgws-plugin.php:1843 includes/class-mgws-plugin.php:1867 includes/class-mgws-plugin.php:2057 includes/class-mgws-plugin.php:224
+#: includes/class-mgws-plugin.php:1079 includes/class-mgws-plugin.php:1220 includes/class-mgws-plugin.php:1417 includes/class-mgws-plugin.php:1460 includes/class-mgws-plugin.php:1485 includes/class-mgws-plugin.php:1507 includes/class-mgws-plugin.php:1538 includes/class-mgws-plugin.php:1571 includes/class-mgws-plugin.php:1629 includes/class-mgws-plugin.php:1750 includes/class-mgws-plugin.php:1846 includes/class-mgws-plugin.php:1870 includes/class-mgws-plugin.php:2060 includes/class-mgws-plugin.php:227
 msgid "You do not have permission to do that"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:463
+#: includes/class-mgws-plugin.php:466
 msgid "You do not have permission to do that."
 msgstr ""
 
@@ -868,27 +868,27 @@ msgid_plural "warehouses"
 msgstr[0] ""
 msgstr[1] ""
 
-#: includes/class-mgws-plugin.php:408 includes/class-mgws-plugin.php:422 includes/class-mgws-plugin.php:426
+#: includes/class-mgws-plugin.php:411 includes/class-mgws-plugin.php:425 includes/class-mgws-plugin.php:429
 msgctxt "order status"
 msgid "Accepted"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:296
+#: includes/class-mgws-plugin.php:299
 msgctxt "post type plural name"
 msgid "Sites"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:309
+#: includes/class-mgws-plugin.php:312
 msgctxt "post type plural name"
 msgid "Warehouses"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:297
+#: includes/class-mgws-plugin.php:300
 msgctxt "post type singular name"
 msgid "Site"
 msgstr ""
 
-#: includes/class-mgws-plugin.php:310
+#: includes/class-mgws-plugin.php:313
 msgctxt "post type singular name"
 msgid "Warehouse"
 msgstr ""
