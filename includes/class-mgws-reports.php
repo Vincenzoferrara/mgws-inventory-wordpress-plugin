@@ -51,6 +51,23 @@ class MGWS_Reports {
             'first_purchase' => array('sales', 'date'),
             'last_purchase' => array('sales', 'date'),
             'days_since_last_purchase' => array('sales', 'days'),
+            // Costo e margine: il costo e' uno snapshot preso al momento della
+            // vendita, quindi non cambia quando cambia il costo dichiarato.
+            // Cost and margin: cost is a snapshot taken at sale time.
+            'cost' => array('sales', 'currency'),
+            'margin' => array('sales', 'currency'),
+            'margin_rate' => array('sales', 'percent'),
+            'cost_coverage' => array('sales', 'percent'),
+            'revenue_share' => array('sales', 'percent'),
+            // Giacenza: uno stato di adesso, non un intervallo.
+            // On hand: a current state, not a period.
+            'qty_on_hand' => array('stock', 'count'),
+            'stock_value' => array('stock', 'currency'),
+            'unvalued_qty' => array('stock', 'count'),
+            'stock_cost_coverage' => array('stock', 'percent'),
+            'sold_qty' => array('stock', 'count'),
+            'rotation' => array('stock', 'decimal'),
+            'days_without_sale' => array('stock', 'days'),
             'closings' => array('closings', 'count'),
             'cash_collected' => array('closings', 'currency'),
             'card_collected' => array('closings', 'currency'),
@@ -69,6 +86,7 @@ class MGWS_Reports {
     /** Dimensions: key => [kind, sources]. */
     public static function dimensions() {
         $both = array('sales', 'closings');
+        $sales_stock = array('sales', 'stock');
         return array(
             'hour' => array('time', $both),
             'weekday' => array('time', $both),
@@ -77,31 +95,36 @@ class MGWS_Reports {
             'month' => array('time', $both),
             'quarter' => array('time', $both),
             'year' => array('time', $both),
-            'product' => array('entity', array('sales')),
-            'variation' => array('entity', array('sales')),
-            'category' => array('entity', array('sales')),
-            'brand' => array('entity', array('sales')),
+            'product' => array('entity', $sales_stock),
+            'variation' => array('entity', $sales_stock),
+            'category' => array('entity', $sales_stock),
+            'brand' => array('entity', $sales_stock),
             'customer' => array('entity', array('sales')),
             'channel' => array('entity', array('sales')),
             'register' => array('entity', $both),
             'operator' => array('entity', $both),
             'payment_method' => array('entity', array('sales')),
+            'site' => array('entity', array('stock')),
+            'warehouse' => array('entity', array('stock')),
         );
     }
 
     /** Filters: key => [type, sources]. */
     public static function filters() {
         $both = array('sales', 'closings');
+        $sales_stock = array('sales', 'stock');
         return array(
-            'product_ids' => array('ints', array('sales')),
-            'variation_ids' => array('ints', array('sales')),
-            'category_ids' => array('ints', array('sales')),
-            'brand_ids' => array('ints', array('sales')),
+            'product_ids' => array('ints', $sales_stock),
+            'variation_ids' => array('ints', $sales_stock),
+            'category_ids' => array('ints', $sales_stock),
+            'brand_ids' => array('ints', $sales_stock),
             'customer_keys' => array('customer_keys', array('sales')),
             'channels' => array('channels', array('sales')),
             'registers' => array('strings', $both),
             'operator_ids' => array('ints', $both),
             'payment_methods' => array('strings', array('sales')),
+            'site_ids' => array('ints', array('stock')),
+            'warehouse_ids' => array('ints', array('stock')),
         );
     }
 
@@ -400,16 +423,29 @@ class MGWS_Reports {
     private static function aggregate(array $request, DateTimeImmutable $from, DateTimeImmutable $to, $dimension) {
         $from_gmt = $from->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
         $to_gmt = $to->modify('+1 day')->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
-        $rows = $request['source'] === 'closings'
-            ? self::query_closings($request, $from_gmt, $to_gmt, $dimension)
-            : self::query_sales($request, $from_gmt, $to_gmt, $dimension);
+        if ($request['source'] === 'closings') {
+            $rows = self::query_closings($request, $from_gmt, $to_gmt, $dimension);
+        } elseif ($request['source'] === 'stock') {
+            $rows = self::query_stock($request, $from_gmt, $to_gmt, $dimension);
+        } else {
+            $rows = self::query_sales($request, $from_gmt, $to_gmt, $dimension);
+        }
+
+        // La quota di ricavo ha bisogno del totale del periodo, che non si
+        // ricava dalle righe gia' derivate: sarebbe un ciclo.
+        // Revenue share needs the period total, which cannot come from the
+        // rows already derived: that would be a cycle.
+        $gross_total = null;
+        if (in_array('revenue_share', $request['measures'], true)) {
+            $gross_total = self::gross_total($request, $from_gmt, $to_gmt);
+        }
 
         $out = array();
         foreach ($rows as $row) {
             $out[] = array(
                 'key' => $dimension === null ? '' : (string) $row['dim_key'],
                 'label' => '',
-                'values' => self::derive($request['measures'], $row),
+                'values' => self::derive($request['measures'], $row, $gross_total),
             );
         }
         if ($dimension === null) {
@@ -457,6 +493,8 @@ class MGWS_Reports {
             . ' SUM(f.gross) AS gross, SUM(f.net) AS net, SUM(f.gross_sales) AS gross_sales,'
             . ' SUM(f.list_value) AS list_value, SUM(f.returns_value) AS returns_value,'
             . ' SUM(f.qty_sold) AS qty_sold, SUM(f.qty_returned) AS qty_returned,'
+            . ' SUM(f.cost) AS cost,'
+            . ' SUM(CASE WHEN f.cost IS NOT NULL THEN f.net END) AS net_covered,'
             . ' COUNT(DISTINCT CASE WHEN f.qty_sold > 0 THEN f.doc_key END) AS documents,'
             . " COUNT(DISTINCT CASE WHEN f.qty_sold > 0 AND f.customer_key <> '' THEN f.doc_key END) AS identified_documents,"
             . " SUM(CASE WHEN f.customer_key <> '' THEN f.gross ELSE 0 END) AS identified_gross,"
@@ -498,7 +536,8 @@ class MGWS_Reports {
             . " (CASE WHEN {$is_return} THEN -1 ELSE 1 END) * {$line_gross} / (1 + l.vat_rate / 100) AS net,"
             . " CASE WHEN {$is_return} THEN 0 ELSE {$line_gross} END AS gross_sales,"
             . " CASE WHEN {$is_return} THEN 0 ELSE ABS(l.quantity) * l.unit_price END AS list_value,"
-            . " CASE WHEN {$is_return} THEN {$line_gross} ELSE 0 END AS returns_value"
+            . " CASE WHEN {$is_return} THEN {$line_gross} ELSE 0 END AS returns_value,"
+            . ' l.cost_total_cents AS cost'
             . " FROM {$receipts} r INNER JOIN {$lines} l ON l.receipt_id = r.id"
             . " WHERE r.status <> 'cancelled' AND r.issued_at_gmt >= %s AND r.issued_at_gmt < %s";
         $params[] = $from_gmt;
@@ -522,7 +561,8 @@ class MGWS_Reports {
                 . " (CASE WHEN {$is_refund} THEN -ABS(p.product_net_revenue) ELSE p.product_net_revenue END),"
                 . " CASE WHEN {$is_refund} THEN 0 ELSE {$online_gross} END,"
                 . " CASE WHEN {$is_refund} THEN 0 ELSE {$online_gross} + p.coupon_amount END,"
-                . " CASE WHEN {$is_refund} THEN ABS({$online_gross}) ELSE 0 END"
+                . " CASE WHEN {$is_refund} THEN ABS({$online_gross}) ELSE 0 END,"
+                . ' NULL'
                 . " FROM {$product_lookup} p"
                 . " INNER JOIN {$order_stats} s ON s.order_id = p.order_id"
                 . " LEFT JOIN {$customer_lookup} c ON c.customer_id = p.customer_id"
@@ -712,13 +752,185 @@ class MGWS_Reports {
     }
 
     // =====================================================================
+    // Stock source
+    // =====================================================================
+
+    /**
+     * Totale di ricavo del periodo, senza dimensione.
+     *
+     * Serve solo a `revenue_share`: ricavarlo dai totali gia' derivati sarebbe
+     * un ciclo, perche' `derive()` e' la funzione che lo usa.
+     * Period revenue total, used only by `revenue_share`.
+     */
+    private static function gross_total(array $request, $from_gmt, $to_gmt) {
+        global $wpdb;
+        $params = array();
+        $fact = self::sales_fact_sql($from_gmt, $to_gmt, $params);
+        $where = array('1=1');
+        self::sales_filter_sql($request['filters'], $where, $params);
+        $sql = "SELECT SUM(f.gross) FROM ({$fact}) f WHERE " . implode(' AND ', $where);
+        // $sql is assembled from this class's own fragments; every request value is a bound placeholder.
+        $value = $wpdb->get_var($wpdb->prepare($sql, $params)); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
+        return $value === null ? null : (float) $value;
+    }
+
+    /**
+     * Giacenza attuale, con i pezzi venduti nel periodo.
+     *
+     * `qty_on_hand` e `stock_value` sono lo stato di adesso; `sold_qty` segue il
+     * periodo richiesto. Non e' un errore: senza snapshot storici e' la sola
+     * cosa vera che si puo' dire.
+     * Current stock, with the units sold in the period.
+     */
+    private static function query_stock(array $request, $from_gmt, $to_gmt, $dimension) {
+        global $wpdb;
+        $levels = MGWS_DB::table_levels();
+        $filters = $request['filters'];
+
+        $item_where = array('1=1');
+        $item_params = array();
+        $in = function ($column, array $values, $format) use (&$item_where, &$item_params) {
+            $item_where[] = $column . ' IN (' . implode(',', array_fill(0, count($values), $format)) . ')';
+            foreach ($values as $value) {
+                $item_params[] = $value;
+            }
+        };
+        if (!empty($filters['site_ids'])) {
+            $in('l.site_id', $filters['site_ids'], '%d');
+        }
+        if (!empty($filters['warehouse_ids'])) {
+            $in('l.warehouse_id', $filters['warehouse_ids'], '%d');
+        }
+        if (!empty($filters['product_ids'])) {
+            $in('l.product_id', $filters['product_ids'], '%d');
+        }
+        if (!empty($filters['variation_ids'])) {
+            $in('l.variation_id', $filters['variation_ids'], '%d');
+        }
+        foreach (array('category_ids' => 'product_cat', 'brand_ids' => 'product_brand') as $key => $taxonomy) {
+            if (empty($filters[$key])) {
+                continue;
+            }
+            $term_ids = self::with_child_terms($filters[$key], $taxonomy);
+            $item_where[] = 'l.product_id IN (SELECT str.object_id FROM ' . $wpdb->term_relationships . ' str'
+                . ' INNER JOIN ' . $wpdb->term_taxonomy . ' stt ON stt.term_taxonomy_id = str.term_taxonomy_id'
+                . " AND stt.taxonomy = '" . esc_sql($taxonomy) . "'"
+                . ' WHERE stt.term_id IN (' . implode(',', array_fill(0, count($term_ids), '%d')) . '))';
+            foreach ($term_ids as $term_id) {
+                $item_params[] = $term_id;
+            }
+        }
+
+        $value_sql = 'SUM(CASE WHEN l.stock_value_cents IS NULL THEN 0 ELSE l.stock_value_cents END) AS stock_value_cents,'
+            . ' SUM(CASE WHEN l.stock_value_cents IS NULL THEN l.qty ELSE 0 END) AS unvalued_qty';
+
+        // Sede e magazzino non possono attribuire le vendite del periodo: il
+        // fact vendite non ha una sede. I pezzi venduti restano ignoti li'.
+        // Site and warehouse cannot attribute period sales: the sales fact has
+        // no location. Sold units stay unknown there.
+        if ($dimension === 'site' || $dimension === 'warehouse') {
+            $column = $dimension === 'site' ? 'l.site_id' : 'l.warehouse_id';
+            $sql = "SELECT {$column} AS dim_key, SUM(l.qty) AS qty_on_hand, {$value_sql},"
+                . ' NULL AS sold_qty, NULL AS last_ts'
+                . " FROM {$levels} l WHERE " . implode(' AND ', $item_where)
+                . ' GROUP BY dim_key';
+            // $sql is assembled from the plugin's own table and whitelisted columns; values are placeholders.
+            $rows = $wpdb->get_results($wpdb->prepare($sql, $item_params), ARRAY_A); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
+            return is_array($rows) ? $rows : array();
+        }
+
+        $group_variation = ($dimension === 'variation');
+        $item_sql = 'SELECT l.product_id AS product_id, ' . ($group_variation ? 'l.variation_id' : '0') . ' AS variation_id,'
+            . ' SUM(l.qty) AS qty_on_hand, ' . $value_sql
+            . " FROM {$levels} l WHERE " . implode(' AND ', $item_where)
+            . ' GROUP BY l.product_id' . ($group_variation ? ', l.variation_id' : '');
+
+        $sales_params = array();
+        $sales_fact = self::sales_fact_sql($from_gmt, $to_gmt, $sales_params);
+        $sales_where = array('1=1');
+        self::sales_filter_sql($filters, $sales_where, $sales_params);
+        $sales_sql = 'SELECT f.product_id AS product_id, ' . ($group_variation ? 'f.variation_id' : '0') . ' AS variation_id,'
+            . ' SUM(f.qty_sold) AS sold_qty'
+            . " FROM ({$sales_fact}) f WHERE " . implode(' AND ', $sales_where)
+            . ' GROUP BY f.product_id' . ($group_variation ? ', f.variation_id' : '');
+
+        // L'ultima vendita guarda tutto lo storico: "mai venduto" e' un fatto
+        // assoluto, non relativo al periodo scelto.
+        // The last sale looks at all history: "never sold" is absolute.
+        $last_params = array();
+        $all_fact = self::sales_fact_sql('1970-01-01 00:00:00', $to_gmt, $last_params);
+        $last_where = array('1=1', 'f.qty_sold > 0');
+        self::sales_filter_sql($filters, $last_where, $last_params);
+        $last_sql = 'SELECT f.product_id AS product_id, ' . ($group_variation ? 'f.variation_id' : '0') . ' AS variation_id,'
+            . ' MAX(f.ts) AS last_ts'
+            . " FROM ({$all_fact}) f WHERE " . implode(' AND ', $last_where)
+            . ' GROUP BY f.product_id' . ($group_variation ? ', f.variation_id' : '');
+
+        $dim_expr = "''";
+        $joins = '';
+        $outer_where = '';
+        if ($dimension === 'product') {
+            $dim_expr = 's.product_id';
+            $outer_where = 's.product_id > 0';
+        } elseif ($dimension === 'variation') {
+            $dim_expr = 's.variation_id';
+            $outer_where = 's.product_id > 0';
+        } elseif ($dimension === 'category' || $dimension === 'brand') {
+            $taxonomy = $dimension === 'category' ? 'product_cat' : 'product_brand';
+            $dim_expr = 'dtt.term_id';
+            $joins = " INNER JOIN {$wpdb->term_relationships} dtr ON dtr.object_id = s.product_id"
+                . " INNER JOIN {$wpdb->term_taxonomy} dtt ON dtt.term_taxonomy_id = dtr.term_taxonomy_id AND dtt.taxonomy = '" . esc_sql($taxonomy) . "'";
+        }
+
+        $sql = "SELECT {$dim_expr} AS dim_key,"
+            . ' SUM(s.qty_on_hand) AS qty_on_hand,'
+            . ' SUM(s.stock_value_cents) AS stock_value_cents,'
+            . ' SUM(s.unvalued_qty) AS unvalued_qty,'
+            . ' SUM(COALESCE(p.sold_qty, 0)) AS sold_qty,'
+            . ' MAX(h.last_ts) AS last_ts'
+            . " FROM ({$item_sql}) s"
+            . " LEFT JOIN ({$sales_sql}) p ON p.product_id = s.product_id AND p.variation_id = s.variation_id"
+            . " LEFT JOIN ({$last_sql}) h ON h.product_id = s.product_id AND h.variation_id = s.variation_id"
+            . $joins
+            . ($outer_where !== '' ? ' WHERE ' . $outer_where : '')
+            . ($dimension !== null ? ' GROUP BY dim_key' : '');
+
+        // $sql is assembled from this class's own fragments: plugin and WooCommerce table names, whitelisted dimensions
+        // and filters. Every request value is a placeholder bound through $params.
+        $params = array_merge($item_params, $sales_params, $last_params);
+        $rows = $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
+        return is_array($rows) ? $rows : array();
+    }
+
+    // =====================================================================
     // Measures and labels
     // =====================================================================
 
-    private static function derive(array $measures, array $row) {
+    /**
+     * Scala dei valori in unita' minori usata da costi e valori di magazzino.
+     *
+     * @return float
+     */
+    private static function money_scale() {
+        if (class_exists('MGWS_Cost')) {
+            $decimals = (int) MGWS_Cost::minor_unit();
+        } else {
+            $decimals = function_exists('wc_get_price_decimals') ? (int) wc_get_price_decimals() : 2;
+        }
+        return pow(10, max(0, $decimals));
+    }
+
+    private static function derive(array $measures, array $row, ?float $gross_total = null) {
         $number = function ($key) use ($row) {
             return isset($row[$key]) && $row[$key] !== null ? (float) $row[$key] : 0.0;
         };
+        // Un NULL non e' uno zero: `SUM(f.cost)` su sole righe scoperte e' NULL
+        // e un 0 li' significherebbe "merce gratis", cioe' margine 100%.
+        // A NULL is not a zero: an uncovered cost must stay unknown.
+        $maybe = function ($key) use ($row) {
+            return isset($row[$key]) && $row[$key] !== null ? (float) $row[$key] : null;
+        };
+        $scale = self::money_scale();
         $ratio = function ($numerator, $denominator, $scale = 1) {
             return $denominator > 0 ? round($numerator / $denominator * $scale, 4) : null;
         };
@@ -799,6 +1011,67 @@ class MGWS_Reports {
                         ? (int) floor((time() - strtotime($row['last_ts'] . ' UTC')) / DAY_IN_SECONDS)
                         : null;
                     break;
+                case 'cost':
+                    $cost_cents = $maybe('cost');
+                    $value = $cost_cents === null ? null : round($cost_cents / $scale, 2);
+                    break;
+                case 'margin':
+                    $cost_cents = $maybe('cost');
+                    $covered = $maybe('net_covered');
+                    $value = $cost_cents === null || $covered === null
+                        ? null
+                        : round($covered - $cost_cents / $scale, 2);
+                    break;
+                case 'margin_rate':
+                    $cost_cents = $maybe('cost');
+                    $covered = $maybe('net_covered');
+                    $value = $cost_cents === null || $covered === null || $covered <= 0
+                        ? null
+                        : round(($covered - $cost_cents / $scale) / $covered * 100, 4);
+                    break;
+                case 'cost_coverage':
+                    $covered = $maybe('net_covered');
+                    $net = $maybe('net');
+                    $value = $net === null || $net == 0.0
+                        ? null
+                        : round((($covered ?? 0.0) / $net) * 100, 4);
+                    break;
+                case 'revenue_share':
+                    $gross = $maybe('gross');
+                    $value = $gross_total === null || $gross_total == 0.0 || $gross === null
+                        ? null
+                        : round($gross / $gross_total * 100, 4);
+                    break;
+                case 'qty_on_hand':
+                    $value = (int) $number('qty_on_hand');
+                    break;
+                case 'stock_value':
+                    $value = round($number('stock_value_cents') / $scale, 2);
+                    break;
+                case 'unvalued_qty':
+                    $value = (int) $number('unvalued_qty');
+                    break;
+                case 'stock_cost_coverage':
+                    $on_hand = $number('qty_on_hand');
+                    $value = $on_hand > 0
+                        ? round((($on_hand - $number('unvalued_qty')) / $on_hand) * 100, 4)
+                        : null;
+                    break;
+                case 'sold_qty':
+                    $value = (int) $number('sold_qty');
+                    break;
+                case 'rotation':
+                    $on_hand = $number('qty_on_hand');
+                    $value = $on_hand > 0 ? round($number('sold_qty') / $on_hand, 4) : null;
+                    break;
+                case 'days_without_sale':
+                    // NULL = mai venduto, il caso piu' morto di tutti, non il
+                    // meno: l'ordinamento lo tratta come "giorni infiniti".
+                    // NULL = never sold, the deadest case, not the least.
+                    $value = !empty($row['last_ts'])
+                        ? (int) floor((time() - strtotime($row['last_ts'] . ' UTC')) / DAY_IN_SECONDS)
+                        : null;
+                    break;
                 case 'closings':
                     $value = (int) $number('closings');
                     break;
@@ -829,6 +1102,13 @@ class MGWS_Reports {
             }
             $left = $a['values'][$measure];
             $right = $b['values'][$measure];
+            if ($measure === 'days_without_sale') {
+                // Mai venduto = giorni infiniti: e' il caso piu' morto e va
+                // per primo quando si ordina dal piu' fermo.
+                // Never sold = infinite days, the deadest case.
+                $left = $left === null ? INF : $left;
+                $right = $right === null ? INF : $right;
+            }
             if ($left === $right) {
                 return strcmp((string) $a['key'], (string) $b['key']);
             }

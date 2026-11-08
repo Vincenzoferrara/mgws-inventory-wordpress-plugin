@@ -5,6 +5,29 @@ if (!defined('ABSPATH')) {
 }
 
 require_once __DIR__ . '/mgws-db.php';
+require_once __DIR__ . '/class-mgws-stock-plan.php';
+require_once __DIR__ . '/class-mgws-cost-plan.php';
+require_once __DIR__ . '/class-mgws-cost.php';
+require_once __DIR__ . '/class-mgws-woo-stock.php';
+require_once __DIR__ . '/class-mgws-stock-reconciler.php';
+require_once __DIR__ . '/class-mgws-order-stock.php';
+require_once __DIR__ . '/class-mgws-stock-lots.php';
+require_once __DIR__ . '/class-mgws-stock-transfers.php';
+require_once __DIR__ . '/class-mgws-stock-reset.php';
+require_once __DIR__ . '/class-mgws-price-lists.php';
+require_once __DIR__ . '/class-mgws-approval-rules.php';
+require_once __DIR__ . '/class-mgws-returns.php';
+require_once __DIR__ . '/class-mgws-supplier-price-history.php';
+require_once __DIR__ . '/class-mgws-count-schedules.php';
+require_once __DIR__ . '/class-mgws-shipments.php';
+require_once __DIR__ . '/class-mgws-reservations.php';
+require_once __DIR__ . '/class-mgws-payments.php';
+require_once __DIR__ . '/class-mgws-kits.php';
+require_once __DIR__ . '/class-mgws-documents.php';
+require_once __DIR__ . '/class-mgws-product-barcodes.php';
+require_once __DIR__ . '/class-mgws-permission-sets.php';
+require_once __DIR__ . '/class-mgws-employee-shifts.php';
+require_once __DIR__ . '/class-mgws-employee-files.php';
 require_once __DIR__ . '/class-mgws-rest-api.php';
 require_once __DIR__ . '/class-mgws-reports.php';
 require_once __DIR__ . '/class-mgws-print.php';
@@ -13,17 +36,7 @@ class MGWS_Plugin {
     private static $instance = null;
     private const CAPS_VERSION_OPTION = 'mgws_caps_version';
     private const DB_SCHEMA_VERSION_OPTION = 'mgws_db_schema_version';
-    private const DB_SCHEMA_VERSION = '11';
-
-    /**
-     * When enabled, MGWS is the single source of truth for stock and
-     * WooCommerce is not allowed to decrement it a second time.
-     *
-     * Off by default. The filter it controls is order-wide, so refusing it
-     * disables stock reduction for every item in the order and for every other
-     * plugin on the site. A store that wants MGWS authoritative turns this on.
-     */
-    public const OPTION_WOOCOMMERCE_STOCK_AUTHORITY = 'mgws_woocommerce_stock_authority';
+    private const DB_SCHEMA_VERSION = '21';
 
     public static function instance() {
         if (self::$instance === null) {
@@ -37,7 +50,22 @@ class MGWS_Plugin {
         MGWS_DB::normalize_pos_document_types();
         update_option(self::DB_SCHEMA_VERSION_OPTION, self::DB_SCHEMA_VERSION);
         self::ensure_role_capabilities();
+        self::ensure_permission_sets();
         update_option(self::CAPS_VERSION_OPTION, MGWS_PLUGIN_VERSION);
+        MGWS_Stock_Reconciler::schedule();
+        MGWS_Count_Schedules::schedule();
+    }
+
+    /**
+     * Removes the recurring work this plugin added to WP-Cron.
+     *
+     * Deactivation is not uninstallation: the data stays, only the schedules
+     * go, so a plugin that is deactivated and reactivated does not end up with
+     * two nightly sweeps or two count runs.
+     */
+    public static function deactivate() {
+        MGWS_Stock_Reconciler::unschedule();
+        MGWS_Count_Schedules::unschedule();
     }
 
     private function __construct() {
@@ -47,17 +75,24 @@ class MGWS_Plugin {
         // REST API (minimal; permissions via WP capabilities).
         MGWS_REST_API::instance();
 
+        // Listener on the WooCommerce stock total, the nightly sweep and the
+        // guard that keeps order flows out of both.
+        MGWS_Stock_Reconciler::init();
+
+        // Online orders: the ledger follows the total WooCommerce owns.
+        MGWS_Order_Stock::init();
+
+        // Scheduled cycle counts: the daily run opens the due count sessions.
+        MGWS_Count_Schedules::init();
+
         add_action('init', array($this, 'register_user_meta'));
         add_action('init', array($this, 'register_cpts'));
         add_action('init', array($this, 'register_order_status'));
         add_filter('wc_order_statuses', array($this, 'add_order_status_to_list'));
 
-        // Avoid Woo double stock reduction, but only for stores that made MGWS
-        // their stock authority. See filter_can_reduce_order_stock().
-        add_filter('woocommerce_can_reduce_order_stock', array(__CLASS__, 'filter_can_reduce_order_stock'), 10, 2);
-
         add_action('add_meta_boxes', array($this, 'add_order_metabox'));
         add_action('admin_notices', array($this, 'notice_woocommerce_missing'));
+        add_action('admin_notices', array($this, 'notice_cost_configuration'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
         add_action('admin_menu', array($this, 'register_admin_pages'));
 
@@ -99,12 +134,32 @@ class MGWS_Plugin {
         $installed = (string) get_option(self::CAPS_VERSION_OPTION, '');
         // A capability added without a version bump still reaches the roles.
         $admin = get_role('administrator');
-        $missing_caps = $admin && !$admin->has_cap('mgws_reports_read');
+        $missing_caps = false;
+        if ($admin) {
+            foreach (self::custom_caps() as $cap) {
+                if (!$admin->has_cap($cap)) {
+                    $missing_caps = true;
+                    break;
+                }
+            }
+        }
         if ($installed === (string) MGWS_PLUGIN_VERSION && !$missing_caps) {
             return;
         }
         self::ensure_role_capabilities();
+        self::ensure_permission_sets();
         update_option(self::CAPS_VERSION_OPTION, MGWS_PLUGIN_VERSION);
+    }
+
+    /**
+     * I set di permessi sono template nella tabella e ruoli WordPress come
+     * effetto: il seeding gira una volta sola, il riallineamento riporta i
+     * ruoli a quello che la tabella dice (anche dopo una modifica fatta a mano
+     * in wp-admin).
+     */
+    private static function ensure_permission_sets() {
+        MGWS_Permission_Sets::seed_defaults();
+        MGWS_Permission_Sets::sync_all();
     }
 
     private function maybe_upgrade_database() {
@@ -116,25 +171,6 @@ class MGWS_Plugin {
         // Schema 11: tipi documento e riga POS in forma canonica.
         MGWS_DB::normalize_pos_document_types();
         update_option(self::DB_SCHEMA_VERSION_OPTION, self::DB_SCHEMA_VERSION);
-    }
-
-    /**
-     * Decides whether WooCommerce may decrement stock for an order.
-     *
-     * WooCommerce asks this once per order, not once per item, so a `false`
-     * here stops stock reduction for the whole order. That is what MGWS needs
-     * when it owns the stock ledger, and what it must not impose on a store
-     * that has not asked for it.
-     *
-     * @param bool       $reduce Whether WooCommerce wants to reduce stock.
-     * @param mixed|null $order  The order, unused: the decision is store-wide.
-     * @return bool
-     */
-    public static function filter_can_reduce_order_stock(bool $reduce, mixed $order = null): bool {
-        if ('1' === (string) get_option(self::OPTION_WOOCOMMERCE_STOCK_AUTHORITY, '0')) {
-            return false;
-        }
-        return $reduce;
     }
 
     /**
@@ -168,6 +204,24 @@ class MGWS_Plugin {
             'mgws_manage_user_permissions',
             'mgws_manage_employees',
             'mgws_reports_read',
+            'mgws_costs_read',
+            'mgws_costs_manage',
+            'mgws_roles_read',
+            'mgws_roles_manage',
+            'mgws_lots_manage',
+            'mgws_transfers_manage',
+            'mgws_price_lists_manage',
+            'mgws_approval_rules_manage',
+            'mgws_returns_manage',
+            'mgws_stock_reset_manage',
+            'mgws_supplier_prices_manage',
+            'mgws_count_schedules_manage',
+            'mgws_shipments_manage',
+            'mgws_reservations_manage',
+            'mgws_payments_manage',
+            'mgws_documents_manage',
+            'mgws_product_barcodes_manage',
+            'mgws_kits_manage',
         );
     }
 
@@ -180,6 +234,12 @@ class MGWS_Plugin {
             'mgws_order_accept',
             'mgws_manage_employees',
             'mgws_reports_read',
+            'mgws_shipments_manage',
+            'mgws_reservations_manage',
+            'mgws_payments_manage',
+            'mgws_documents_manage',
+            'mgws_product_barcodes_manage',
+            'mgws_kits_manage',
         );
     }
 
@@ -187,6 +247,18 @@ class MGWS_Plugin {
         return array(
             'mgws_manage_credentials',
             'mgws_manage_user_permissions',
+            'mgws_costs_read',
+            'mgws_costs_manage',
+            'mgws_roles_read',
+            'mgws_roles_manage',
+            'mgws_lots_manage',
+            'mgws_transfers_manage',
+            'mgws_price_lists_manage',
+            'mgws_approval_rules_manage',
+            'mgws_returns_manage',
+            'mgws_stock_reset_manage',
+            'mgws_supplier_prices_manage',
+            'mgws_count_schedules_manage',
         );
     }
 
@@ -196,6 +268,11 @@ class MGWS_Plugin {
         if ($admin) {
             foreach ($caps as $cap) {
                 $admin->add_cap($cap);
+            }
+            // Capability rimosse in S10/S10b: revoca esplicita per le installazioni
+            // che le avevano ricevute, altrimenti restano orfane sul ruolo.
+            foreach (array('mgws_notification_templates_manage', 'mgws_notification_preferences_manage') as $removed_cap) {
+                $admin->remove_cap($removed_cap);
             }
         }
 
@@ -220,6 +297,47 @@ class MGWS_Plugin {
             'mgws-masterdata',
             array($this, 'render_masterdata_page')
         );
+    }
+
+    /**
+     * Tells the administrator when cost tracking runs without the WooCommerce
+     * projection, or when the money scale changed under the stored values.
+     *
+     * A notice, not a failure: the plugin keeps valuing stock on its own. The
+     * projection is a convenience for order margins, not a dependency.
+     *
+     * @return void
+     */
+    public function notice_cost_configuration(): void {
+        if (!current_user_can('manage_woocommerce')) {
+            return;
+        }
+        if (!class_exists('WooCommerce')) {
+            return;
+        }
+        $screen = function_exists('get_current_screen') ? get_current_screen() : null;
+        $screen_id = $screen ? (string) $screen->id : '';
+        if ($screen_id !== 'dashboard' && strpos($screen_id, 'woocommerce') === false) {
+            return;
+        }
+
+        if (MGWS_Cost::minor_unit_mismatch()) {
+            echo '<div class="notice notice-warning"><p>';
+            echo esc_html__(
+                'MG Warehouse Stock: WooCommerce now uses a different number of price decimals. Stock values already stored keep the scale they were written with; new costs use the new scale. Check the cost report before entering new prices.',
+                'mg-warehouse-stock'
+            );
+            echo '</p></div>';
+        }
+
+        if (!MGWS_Cost::cogs_enabled()) {
+            echo '<div class="notice notice-info"><p>';
+            echo esc_html__(
+                'MG Warehouse Stock: WooCommerce Cost of Goods Sold is not enabled. Costs and stock value still work inside MG Warehouse Stock, but they are not projected to WooCommerce.',
+                'mg-warehouse-stock'
+            );
+            echo '</p></div>';
+        }
     }
 
     public function render_masterdata_page() {
@@ -873,8 +991,8 @@ class MGWS_Plugin {
 
     private function get_warehouses_for_site_limit($site_limit) {
         $site_limit = (int) $site_limit;
-        if ($site_limit > 0) {
-            return get_posts(array(
+        $warehouses = $site_limit > 0
+            ? get_posts(array(
                 'post_type' => 'mg_warehouse',
                 'posts_per_page' => -1,
                 'orderby' => 'title',
@@ -886,14 +1004,21 @@ class MGWS_Plugin {
                         'compare' => '=',
                     ),
                 ),
+            ))
+            : get_posts(array(
+                'post_type' => 'mg_warehouse',
+                'posts_per_page' => -1,
+                'orderby' => 'title',
+                'order' => 'ASC',
             ));
-        }
-        return get_posts(array(
-            'post_type' => 'mg_warehouse',
-            'posts_per_page' => -1,
-            'orderby' => 'title',
-            'order' => 'ASC',
-        ));
+
+        // The "Unassigned" warehouse is where the reconciliation puts stock
+        // that no shelf claims. It is a real bucket, but it is not a place
+        // someone can choose: offering it in a picker would let an operator
+        // file real stock into the bin reserved for the unexplained.
+        return array_values(array_filter(is_array($warehouses) ? $warehouses : array(), function ($warehouse) {
+            return !MGWS_Stock_Reconciler::is_system_warehouse((int) $warehouse->ID);
+        }));
     }
 
     public function save_product_default_location($post_id, $post) {
@@ -1229,8 +1354,7 @@ class MGWS_Plugin {
             wp_send_json_error(array('message' => __('Invalid order', 'mg-warehouse-stock')), 404);
         }
 
-        $committed = (int) get_post_meta($order_id, '_mgws_accept_committed', true);
-        if ($committed === 1) {
+        if (MGWS_Order_Stock::is_accepted($order)) {
             wp_send_json_error(array('message' => __('Order already accepted', 'mg-warehouse-stock')), 409);
         }
 
@@ -1254,7 +1378,6 @@ class MGWS_Plugin {
 
         $allocations = array();
         $allocated_by_card = array();
-        $touched_items = array();
 
         $site_limit = $this->get_user_site_limit(get_current_user_id());
 
@@ -1265,7 +1388,6 @@ class MGWS_Plugin {
             if ($pid <= 0) {
                 continue;
             }
-            $touched_items[$card_key] = array('product_id' => $pid, 'variation_id' => $vid);
 
             $allocs = is_array($card['allocations'] ?? null) ? $card['allocations'] : array();
             foreach ($allocs as $a) {
@@ -1322,14 +1444,21 @@ class MGWS_Plugin {
         });
 
         $user_id = get_current_user_id();
-        $result = MGWS_DB::commit_order_accept($order_id, $user_id, $allocations);
-        if (!$result['ok']) {
-            wp_send_json_error(array('message' => $result['message']), 409);
+        // Un ordine gia' allocato al pagamento ha i pezzi fuori dal ledger:
+        // l'accettazione conferma soltanto. Lo stato si legge dai movimenti,
+        // non da un flag scritto sull'ordine del sito.
+        // An order already allocated at payment has the pieces out of the
+        // ledger: acceptance only confirms. The state is read from the
+        // movements, not from a flag written on the storefront order.
+        if (!MGWS_Order_Stock::already_taken($order_id)) {
+            $result = MGWS_DB::commit_order_accept($order_id, $user_id, $allocations);
+            if (!$result['ok']) {
+                wp_send_json_error(array('message' => $result['message']), 409);
+            }
         }
 
-        foreach ($touched_items as $it) {
-            $this->sync_woo_stock((int) $it['product_id'], (int) $it['variation_id']);
-        }
+        // WooCommerce owns the total: the order exists in Woo and Woo has
+        // already reduced the stock for it.
 
         $allocation_audit = array(
             'order_id' => $order_id,
@@ -1370,18 +1499,6 @@ class MGWS_Plugin {
         $order->update_status('mg-accepted');
 
         wp_send_json_success(array('message' => __('Order accepted', 'mg-warehouse-stock'), 'totals' => $allocation_audit['totals']));
-    }
-
-    private function sync_woo_stock($product_id, $variation_id) {
-        $sum = MGWS_DB::sum_qty_for_item($product_id, $variation_id);
-        $product = $variation_id > 0 ? wc_get_product($variation_id) : wc_get_product($product_id);
-        if (!$product) {
-            return;
-        }
-        $product->set_manage_stock(true);
-        $product->set_stock_quantity($sum);
-        $product->set_stock_status($sum > 0 ? 'instock' : 'outofstock');
-        $product->save();
     }
 
     private function load_post_titles($ids) {
@@ -1727,7 +1844,10 @@ class MGWS_Plugin {
         if ($wid_for_suggest <= 0) {
             $whs = get_posts(array(
                 'post_type' => 'mg_warehouse',
-                'posts_per_page' => 1,
+                'posts_per_page' => -1,
+                'fields' => 'ids',
+                'orderby' => 'title',
+                'order' => 'ASC',
                 'meta_query' => array(
                     array(
                         'key' => 'mg_site_id',
@@ -1736,8 +1856,9 @@ class MGWS_Plugin {
                     ),
                 ),
             ));
+            $whs = MGWS_Stock_Reconciler::filter_system_warehouses(is_array($whs) ? $whs : array());
             if (!empty($whs)) {
-                $wid_for_suggest = (int) $whs[0]->ID;
+                $wid_for_suggest = (int) $whs[0];
             }
         }
         $suggest = $wid_for_suggest > 0 ? MGWS_DB::get_location_suggestions_for_warehouse($wid_for_suggest) : array('rooms' => array(), 'racks' => array(), 'shelves' => array(), 'racks_by_room' => array(), 'shelves_by_room_rack' => array(), 'tree' => array('rooms' => array()));
@@ -1821,7 +1942,10 @@ class MGWS_Plugin {
         if ($wid_for_suggest <= 0) {
             $whs = get_posts(array(
                 'post_type' => 'mg_warehouse',
-                'posts_per_page' => 1,
+                'posts_per_page' => -1,
+                'fields' => 'ids',
+                'orderby' => 'title',
+                'order' => 'ASC',
                 'meta_query' => array(
                     array(
                         'key' => 'mg_site_id',
@@ -1830,8 +1954,9 @@ class MGWS_Plugin {
                     ),
                 ),
             ));
+            $whs = MGWS_Stock_Reconciler::filter_system_warehouses(is_array($whs) ? $whs : array());
             if (!empty($whs)) {
-                $wid_for_suggest = (int) $whs[0]->ID;
+                $wid_for_suggest = (int) $whs[0];
             }
         }
         $suggest = $wid_for_suggest > 0
@@ -2016,7 +2141,7 @@ class MGWS_Plugin {
 
         $warehouses = get_posts(array(
             'post_type' => 'mg_warehouse',
-            'posts_per_page' => 1,
+            'posts_per_page' => -1,
             'meta_query' => array(
                 array(
                     'key' => 'mg_site_id',
@@ -2026,7 +2151,21 @@ class MGWS_Plugin {
             ),
             'fields' => 'ids',
         ));
-        if (!empty($warehouses)) {
+        // The "Unassigned" warehouse is not a warehouse the operator created:
+        // it appears the first time the reconciliation finds a difference. It
+        // must not be a reason to refuse deleting an empty site, and it goes
+        // with the site that owns it.
+        $warehouse_ids = array_map('intval', is_array($warehouses) ? $warehouses : array());
+        $system_warehouses = array();
+        $real_warehouses = array();
+        foreach ($warehouse_ids as $warehouse_id) {
+            if (MGWS_Stock_Reconciler::is_system_warehouse($warehouse_id)) {
+                $system_warehouses[] = $warehouse_id;
+            } else {
+                $real_warehouses[] = $warehouse_id;
+            }
+        }
+        if (!empty($real_warehouses)) {
             wp_send_json_error(array(
                 'code' => 'mgws_not_deletable',
                 'message' => __('Cannot delete: the site still has warehouses', 'mg-warehouse-stock'),
@@ -2045,6 +2184,10 @@ class MGWS_Plugin {
                     (int) $moves
                 ),
             ), 409);
+        }
+
+        foreach ($system_warehouses as $warehouse_id) {
+            wp_delete_post($warehouse_id, true);
         }
 
         $res = wp_delete_post($site_id, true);
@@ -2106,7 +2249,7 @@ class MGWS_Plugin {
             }
             $delta = (int) $qty - $old_qty;
             MGWS_DB::insert_move('adjust', (int) $wh_site, $warehouse_id, $product_id, $variation_id, $delta, $room, $rack, $shelf, $user_id, 0, 'Product adjust');
-            $this->sync_woo_stock($product_id, $variation_id);
+            MGWS_Woo_Stock::commit_delta((int) $product_id, (int) $variation_id, $delta);
             wp_send_json_success(array('message' => __('Updated', 'mg-warehouse-stock')));
         }
 
@@ -2119,7 +2262,7 @@ class MGWS_Plugin {
                 wp_send_json_error(array('message' => $res['message'] ?? __('Error', 'mg-warehouse-stock')), 409);
             }
             MGWS_DB::insert_move('in', (int) $wh_site, $warehouse_id, $product_id, $variation_id, $qty, $room, $rack, $shelf, $user_id, 0, 'Product in');
-            $this->sync_woo_stock($product_id, $variation_id);
+            MGWS_Woo_Stock::commit_delta((int) $product_id, (int) $variation_id, $qty);
             wp_send_json_success(array('message' => __('Stock-in recorded', 'mg-warehouse-stock')));
         }
 
@@ -2132,7 +2275,7 @@ class MGWS_Plugin {
                 wp_send_json_error(array('message' => $res['message'] ?? __('Error', 'mg-warehouse-stock')), 409);
             }
             MGWS_DB::insert_move('out', (int) $wh_site, $warehouse_id, $product_id, $variation_id, $qty, $room, $rack, $shelf, $user_id, 0, 'Product out');
-            $this->sync_woo_stock($product_id, $variation_id);
+            MGWS_Woo_Stock::commit_delta((int) $product_id, (int) $variation_id, -$qty);
             wp_send_json_success(array('message' => __('Stock-out recorded', 'mg-warehouse-stock')));
         }
 
@@ -2170,7 +2313,8 @@ class MGWS_Plugin {
             MGWS_DB::insert_move('out', (int) $wh_site, $warehouse_id, $product_id, $variation_id, $qty, $room, $rack, $shelf, $user_id, 0, 'Transfer out', $warehouse_id, $to_warehouse_id);
             MGWS_DB::insert_move('in', (int) $to_site, $to_warehouse_id, $product_id, $variation_id, $qty, $to_room, $to_rack, $to_shelf, $user_id, 0, 'Transfer in', $warehouse_id, $to_warehouse_id);
             $wpdb->query('COMMIT');
-            $this->sync_woo_stock($product_id, $variation_id);
+            // A transfer only moves the quantity between warehouses, so the
+            // WooCommerce total stays the same and nothing is written there.
             wp_send_json_success(array('message' => __('Transfer recorded', 'mg-warehouse-stock')));
         }
 

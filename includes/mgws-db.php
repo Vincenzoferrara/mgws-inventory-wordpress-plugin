@@ -797,9 +797,123 @@ class MGWS_DB {
         return $wpdb->prefix . 'mg_stock_reason_codes';
     }
 
+    public static function table_stock_lots() {
+        global $wpdb;
+        return $wpdb->prefix . 'mg_stock_lots';
+    }
+
+    public static function table_stock_lots_levels() {
+        global $wpdb;
+        return $wpdb->prefix . 'mg_stock_lots_levels';
+    }
+
+    public static function table_stock_transfers() {
+        global $wpdb;
+        return $wpdb->prefix . 'mg_stock_transfers';
+    }
+
+    public static function table_stock_transfer_lines() {
+        global $wpdb;
+        return $wpdb->prefix . 'mg_stock_transfer_lines';
+    }
+
+    public static function table_price_lists() {
+        global $wpdb;
+        return $wpdb->prefix . 'mg_price_lists';
+    }
+
+    public static function table_price_list_items() {
+        global $wpdb;
+        return $wpdb->prefix . 'mg_price_list_items';
+    }
+
+    public static function table_approval_rules() {
+        global $wpdb;
+        return $wpdb->prefix . 'mg_approval_rules';
+    }
+
+    public static function table_returns() {
+        global $wpdb;
+        return $wpdb->prefix . 'mg_returns';
+    }
+
+    public static function table_return_lines() {
+        global $wpdb;
+        return $wpdb->prefix . 'mg_return_lines';
+    }
+
+    public static function table_supplier_price_history() {
+        global $wpdb;
+        return $wpdb->prefix . 'mg_supplier_price_history';
+    }
+
+    public static function table_shipments() {
+        global $wpdb;
+        return $wpdb->prefix . 'mg_shipments';
+    }
+
+    public static function table_reservations() {
+        global $wpdb;
+        return $wpdb->prefix . 'mg_reservations';
+    }
+
+    public static function table_payments() {
+        global $wpdb;
+        return $wpdb->prefix . 'mg_payments';
+    }
+
+    public static function table_kits() {
+        global $wpdb;
+        return $wpdb->prefix . 'mg_kits';
+    }
+
+    public static function table_kit_components() {
+        global $wpdb;
+        return $wpdb->prefix . 'mg_kit_components';
+    }
+
+    public static function table_documents() {
+        global $wpdb;
+        return $wpdb->prefix . 'mg_documents';
+    }
+
+    public static function table_product_barcodes() {
+        global $wpdb;
+        return $wpdb->prefix . 'mg_product_barcodes';
+    }
+
+    public static function table_count_schedules() {
+        global $wpdb;
+        return $wpdb->prefix . 'mg_count_schedules';
+    }
+
     public static function table_employees() {
         global $wpdb;
         return $wpdb->prefix . 'mg_employees';
+    }
+
+    public static function table_employee_shifts() {
+        global $wpdb;
+        return $wpdb->prefix . 'mg_employee_shifts';
+    }
+
+    public static function table_employee_documents() {
+        global $wpdb;
+        return $wpdb->prefix . 'mg_employee_documents';
+    }
+
+    public static function table_product_costs() {
+        global $wpdb;
+        return $wpdb->prefix . 'mg_product_costs';
+    }
+
+    /**
+     * Template dei set di permessi. Il ruolo WordPress corrispondente e'
+     * `mgws_{slug}` ed e' solo l'effetto: la tabella e' la sorgente di verita'.
+     */
+    public static function table_permission_sets() {
+        global $wpdb;
+        return $wpdb->prefix . 'mg_permission_sets';
     }
 
     public static function list_employees($search = '', $include_inactive = false, $limit = 100) {
@@ -873,6 +987,7 @@ class MGWS_DB {
             'first_name' => '',
             'last_name' => '',
             'email' => '',
+            'work_email' => '',
             'phone' => '',
             'role_label' => '',
             'status' => 'active',
@@ -880,6 +995,12 @@ class MGWS_DB {
             'salary_cents' => 0,
             'salary_currency' => 'EUR',
             'notes' => '',
+            'weekly_schedule' => null,
+            'contract_type' => '',
+            'contract_level' => '',
+            'contract_start' => null,
+            'contract_end' => null,
+            'contract_minutes_week' => 0,
         );
         foreach ($map as $key => $default) {
             if ($partial && !array_key_exists($key, $data)) {
@@ -895,8 +1016,18 @@ class MGWS_DB {
                 $fields[$key] = preg_match('/^[A-Z]{3}$/', $currency) ? $currency : 'EUR';
             } elseif ($key === 'active') {
                 $fields[$key] = ((int) $value) === 0 ? 0 : 1;
-            } elseif ($key === 'email') {
+            } elseif ($key === 'email' || $key === 'work_email') {
                 $fields[$key] = sanitize_email((string) $value);
+            } elseif ($key === 'weekly_schedule') {
+                // Stored already normalized by MGWS_Employee_Shifts; null means "no schedule".
+                $fields[$key] = is_array($value) ? wp_json_encode(MGWS_Employee_Shifts::normalize_schedule($value)) : null;
+            } elseif ($key === 'contract_type') {
+                $type = sanitize_key((string) $value);
+                $fields[$key] = in_array($type, MGWS_Employee_Shifts::CONTRACT_TYPES, true) ? $type : '';
+            } elseif ($key === 'contract_start' || $key === 'contract_end') {
+                $fields[$key] = MGWS_Employee_Shifts::valid_date($value) ? (string) $value : null;
+            } elseif ($key === 'contract_minutes_week') {
+                $fields[$key] = max(0, min(10080, (int) $value));
             } elseif ($key === 'notes') {
                 $fields[$key] = sanitize_textarea_field((string) $value);
             } elseif ($key === 'status') {
@@ -1844,14 +1975,14 @@ public static function issue_pos_receipt(array $row) {
         $sequential_number = (int) $next;
     }
 
-    $inserted = $wpdb->insert($table, array(
+    $data = array(
         'receipt_key' => $receipt_key,
         'business_day_id' => $business_day_id,
         'register_name' => $register_name,
         'sequential_number' => $sequential_number,
         'status' => (string) ($row['status'] ?? 'paid'),
         'operation_type' => self::normalize_pos_operation_type($row['operation_type'] ?? 'sale'),
-            'shift_id' => !empty($row['shift_id']) ? (int) $row['shift_id'] : null,
+        'shift_id' => !empty($row['shift_id']) ? (int) $row['shift_id'] : null,
         'order_id' => (int) ($row['order_id'] ?? 0),
         'idempotency_key' => (string) ($row['idempotency_key'] ?? ''),
         'coupon_code' => (string) ($row['coupon_code'] ?? ''),
@@ -1873,34 +2004,42 @@ public static function issue_pos_receipt(array $row) {
         'issued_at_gmt' => (string) ($row['issued_at_gmt'] ?? gmdate('Y-m-d H:i:s')),
         'created_by' => (int) ($row['created_by'] ?? 0),
         'created_at_gmt' => gmdate('Y-m-d H:i:s'),
-    ));
+    );
 
-    if ($inserted === false) {
-        // Concorrenza fra due casse: l'indice univoco ha respinto il numero
-        // gia' preso. Si ritenta una volta con il progressivo ricalcolato.
-        // Concurrency between two tills: the unique index rejected a number
-        // already taken. Retry once with a recalculated number.
-        if (!$issued_by_device) {
+    // Concorrenza fra due casse: l'indice univoco respinge il numero gia'
+    // preso e l'INSERT intero fallisce, quindi il retry deve ripetere
+    // l'INSERT con il progressivo ricalcolato. Aggiornare la riga non serve:
+    // su un INSERT fallito la riga non esiste.
+    // Concurrency between two tills: the unique index rejects a number already
+    // taken and the whole INSERT fails, so the retry must INSERT again with a
+    // recalculated number. Updating the row is useless: after a failed INSERT
+    // the row does not exist.
+    $attempts = $issued_by_device ? 1 : 3;
+    $inserted = false;
+    for ($attempt = 0; $attempt < $attempts; $attempt++) {
+        if ($attempt > 0) {
             $next = $wpdb->get_var($wpdb->prepare(
                 'SELECT COALESCE(MAX(sequential_number), 0) + 1 FROM %i WHERE business_day_id = %s AND register_name = %s',
                 $table,
                 $business_day_id,
                 $register_name
             ));
-            $wpdb->query($wpdb->prepare(
-                'UPDATE %i SET sequential_number = %d WHERE receipt_key = %s',
-                $table,
-                (int) $next,
-                $receipt_key
+            $data['sequential_number'] = max((int) $next, (int) $data['sequential_number'] + 1);
+        }
+        $inserted = $wpdb->insert($table, $data);
+        if ($inserted !== false) {
+            break;
+        }
+    }
+
+    if ($inserted === false) {
+        if (function_exists('error_log')) {
+            error_log(sprintf(
+                'MGWS: POS receipt %s could not be recorded after %d attempts (%s)',
+                $receipt_key,
+                $attempts,
+                (string) $wpdb->last_error
             ));
-            $row_after = $wpdb->get_row($wpdb->prepare(
-                'SELECT * FROM %i WHERE receipt_key = %s LIMIT 1',
-                $table,
-                $receipt_key
-            ), ARRAY_A);
-            if (is_array($row_after)) {
-                return array('row' => $row_after, 'replayed' => false);
-            }
         }
         return new WP_Error('mgws_receipt_failed', 'Receipt could not be recorded', array('status' => 500));
     }
@@ -2155,6 +2294,9 @@ public static function get_pos_receipt_by_key($receipt_key) {
  * Stores the document lines without duplicating them when the document
  * already exists. The lines make the document readable and let the server
  * enforce returns against real data instead of device-local history.
+ *
+ * @return int Rows stored on the receipt after the call, inserted or already
+ *             present, so the caller can check that the document is complete.
  */
 public static function save_pos_receipt_lines($receipt_id, array $lines) {
     global $wpdb;
@@ -2166,7 +2308,11 @@ public static function save_pos_receipt_lines($receipt_id, array $lines) {
         (int) $receipt_id
     ));
     if ($existing > 0) {
-        return 0;
+        // Lo scontrino e' gia' completo: un replay non deve riscrivere righe
+        // ne' perdere quelle presenti, quindi si restituisce il totale reale.
+        // The receipt is already complete: a replay must not rewrite or lose
+        // the existing lines, so the real total is returned.
+        return $existing;
     }
 
     $inserted = 0;
@@ -2190,6 +2336,8 @@ public static function save_pos_receipt_lines($receipt_id, array $lines) {
             'source_line_key' => (string) ($line['source_line_key'] ?? ''),
             'return_reason' => (string) ($line['return_reason'] ?? ''),
             'return_outcome' => (string) ($line['return_outcome'] ?? ''),
+            'cost_total_cents' => isset($line['cost_total_cents']) ? (int) $line['cost_total_cents'] : null,
+            'unit_cost_cents' => isset($line['unit_cost_cents']) ? (int) $line['unit_cost_cents'] : null,
             'created_at_gmt' => gmdate('Y-m-d H:i:s'),
         ));
         if ($ok) {
@@ -2454,9 +2602,22 @@ public static function insert_pos_shift($row) {
         $receipt_lines = self::table_receipt_lines();
         $backorders = self::table_backorders();
         $count_sessions = self::table_inventory_count_sessions();
+        $stock_lots = self::table_stock_lots();
+        $stock_lots_levels = self::table_stock_lots_levels();
+        $stock_transfers = self::table_stock_transfers();
+        $stock_transfer_lines = self::table_stock_transfer_lines();
+        $price_lists = self::table_price_lists();
+        $price_list_items = self::table_price_list_items();
+        $approval_rules = self::table_approval_rules();
+        $returns = self::table_returns();
+        $return_lines = self::table_return_lines();
         $count_lines = self::table_inventory_count_lines();
         $reason_codes = self::table_stock_reason_codes();
         $employees = self::table_employees();
+        $employee_shifts = self::table_employee_shifts();
+        $employee_documents = self::table_employee_documents();
+        $product_costs = self::table_product_costs();
+        $permission_sets = self::table_permission_sets();
 
         $sql_levels = "CREATE TABLE {$levels} (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -2465,6 +2626,7 @@ public static function insert_pos_shift($row) {
             product_id BIGINT UNSIGNED NOT NULL,
             variation_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
             qty INT NOT NULL DEFAULT 0,
+            stock_value_cents BIGINT NULL DEFAULT NULL,
             room VARCHAR(80) NOT NULL DEFAULT '',
             rack VARCHAR(80) NOT NULL DEFAULT '',
             shelf VARCHAR(80) NOT NULL DEFAULT '',
@@ -2517,6 +2679,8 @@ public static function insert_pos_shift($row) {
             movement_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
             stock_before INT NULL DEFAULT NULL,
             stock_after INT NULL DEFAULT NULL,
+            unit_cost_cents BIGINT NULL DEFAULT NULL,
+            value_delta_cents BIGINT NULL DEFAULT NULL,
             PRIMARY KEY  (id),
             KEY idx_order (ref_order_id),
             KEY idx_wh_ts (warehouse_id, ts_gmt),
@@ -2629,6 +2793,8 @@ public static function insert_pos_shift($row) {
             source_line_key VARCHAR(191) NOT NULL DEFAULT '',
             return_reason VARCHAR(191) NOT NULL DEFAULT '',
             return_outcome VARCHAR(32) NOT NULL DEFAULT '',
+            cost_total_cents BIGINT NULL DEFAULT NULL,
+            unit_cost_cents BIGINT NULL DEFAULT NULL,
             created_at_gmt DATETIME NOT NULL,
             PRIMARY KEY  (id),
             KEY idx_receipt (receipt_id),
@@ -2887,6 +3053,22 @@ public static function insert_pos_shift($row) {
             KEY idx_stock_move (stock_move_id)
         ) ENGINE=InnoDB {$charset_collate};";
 
+        $count_schedules = self::table_count_schedules();
+        $sql_count_schedules = "CREATE TABLE {$count_schedules} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            site_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            warehouse_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            frequency_days INT NOT NULL DEFAULT 30,
+            next_run_gmt DATETIME NOT NULL,
+            active TINYINT NOT NULL DEFAULT 1,
+            created_by_user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            created_at_gmt DATETIME NOT NULL,
+            updated_at_gmt DATETIME NOT NULL,
+            PRIMARY KEY  (id),
+            KEY idx_warehouse (warehouse_id),
+            KEY idx_next_run (next_run_gmt, active)
+        ) ENGINE=InnoDB {$charset_collate};";
+
         $sql_reason_codes = "CREATE TABLE {$reason_codes} (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             site_id BIGINT UNSIGNED NOT NULL,
@@ -2908,6 +3090,7 @@ public static function insert_pos_shift($row) {
             first_name VARCHAR(191) NOT NULL DEFAULT '',
             last_name VARCHAR(191) NOT NULL DEFAULT '',
             email VARCHAR(191) NOT NULL DEFAULT '',
+            work_email VARCHAR(191) NOT NULL DEFAULT '',
             phone VARCHAR(64) NOT NULL DEFAULT '',
             role_label VARCHAR(191) NOT NULL DEFAULT '',
             status VARCHAR(32) NOT NULL DEFAULT 'active',
@@ -2915,6 +3098,12 @@ public static function insert_pos_shift($row) {
             salary_cents BIGINT UNSIGNED NOT NULL DEFAULT 0,
             salary_currency CHAR(3) NOT NULL DEFAULT 'EUR',
             notes TEXT NULL,
+            weekly_schedule TEXT NULL,
+            contract_type VARCHAR(32) NOT NULL DEFAULT '',
+            contract_level VARCHAR(191) NOT NULL DEFAULT '',
+            contract_start DATE NULL DEFAULT NULL,
+            contract_end DATE NULL DEFAULT NULL,
+            contract_minutes_week INT UNSIGNED NOT NULL DEFAULT 0,
             created_at_gmt DATETIME NOT NULL,
             updated_at_gmt DATETIME NOT NULL,
             PRIMARY KEY  (id),
@@ -2923,13 +3112,386 @@ public static function insert_pos_shift($row) {
             KEY idx_email (email)
         ) ENGINE=InnoDB {$charset_collate};";
 
+        $sql_employee_shifts = "CREATE TABLE {$employee_shifts} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            employee_id BIGINT UNSIGNED NOT NULL,
+            shift_date DATE NOT NULL,
+            start_time CHAR(5) NOT NULL,
+            end_time CHAR(5) NOT NULL,
+            break_minutes SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+            note VARCHAR(255) NOT NULL DEFAULT '',
+            created_by BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            created_at_gmt DATETIME NOT NULL,
+            updated_at_gmt DATETIME NOT NULL,
+            PRIMARY KEY  (id),
+            KEY idx_employee_date (employee_id, shift_date),
+            KEY idx_date (shift_date)
+        ) ENGINE=InnoDB {$charset_collate};";
+
+        $sql_employee_documents = "CREATE TABLE {$employee_documents} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            employee_id BIGINT UNSIGNED NOT NULL,
+            kind VARCHAR(32) NOT NULL DEFAULT 'other',
+            title VARCHAR(191) NOT NULL DEFAULT '',
+            file_name VARCHAR(191) NOT NULL DEFAULT '',
+            stored_name VARCHAR(64) NOT NULL,
+            mime VARCHAR(100) NOT NULL DEFAULT '',
+            size_bytes BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            uploaded_by BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            created_at_gmt DATETIME NOT NULL,
+            PRIMARY KEY  (id),
+            KEY idx_employee (employee_id),
+            UNIQUE KEY uq_stored (stored_name)
+        ) ENGINE=InnoDB {$charset_collate};";
+
+        $sql_product_costs = "CREATE TABLE {$product_costs} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            product_id BIGINT UNSIGNED NOT NULL,
+            variation_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            cost_cents BIGINT NULL DEFAULT NULL,
+            valid_from_gmt DATETIME NOT NULL,
+            source VARCHAR(32) NOT NULL DEFAULT 'manual',
+            note TEXT NULL,
+            created_by BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            created_at_gmt DATETIME NOT NULL,
+            PRIMARY KEY  (id),
+            KEY idx_item_valid (product_id, variation_id, valid_from_gmt),
+            KEY idx_valid (valid_from_gmt)
+        ) ENGINE=InnoDB {$charset_collate};";
+
+        $sql_permission_sets = "CREATE TABLE {$permission_sets} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            slug VARCHAR(64) NOT NULL,
+            label VARCHAR(191) NOT NULL,
+            capabilities TEXT NOT NULL,
+            created_at_gmt DATETIME NOT NULL,
+            updated_at_gmt DATETIME NOT NULL,
+            PRIMARY KEY  (id),
+            UNIQUE KEY uq_slug (slug),
+            KEY idx_label (label)
+        ) ENGINE=InnoDB {$charset_collate};";
+
+        $sql_stock_lots = "CREATE TABLE {$stock_lots} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            product_id BIGINT UNSIGNED NOT NULL,
+            variation_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            supplier_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            lot_code VARCHAR(64) NOT NULL DEFAULT '',
+            expires_at_gmt DATETIME NULL,
+            received_at_gmt DATETIME NULL,
+            note TEXT NULL,
+            created_by_user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            created_at_gmt DATETIME NOT NULL,
+            updated_at_gmt DATETIME NOT NULL,
+            PRIMARY KEY  (id),
+            KEY idx_item (product_id, variation_id),
+            KEY idx_supplier (supplier_id),
+            KEY idx_expires (expires_at_gmt)
+        ) ENGINE=InnoDB {$charset_collate};";
+
+        $sql_stock_lots_levels = "CREATE TABLE {$stock_lots_levels} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            lot_id BIGINT UNSIGNED NOT NULL,
+            warehouse_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            room VARCHAR(80) NOT NULL DEFAULT '',
+            rack VARCHAR(80) NOT NULL DEFAULT '',
+            shelf VARCHAR(80) NOT NULL DEFAULT '',
+            qty INT NOT NULL DEFAULT 0,
+            created_at_gmt DATETIME NOT NULL,
+            updated_at_gmt DATETIME NOT NULL,
+            PRIMARY KEY  (id),
+            UNIQUE KEY uq_lot_level (lot_id, warehouse_id, room, rack, shelf),
+            KEY idx_lot (lot_id),
+            KEY idx_location (warehouse_id, room, rack, shelf)
+        ) ENGINE=InnoDB {$charset_collate};";
+
+        $sql_stock_transfers = "CREATE TABLE {$stock_transfers} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            from_warehouse_id BIGINT UNSIGNED NOT NULL,
+            to_warehouse_id BIGINT UNSIGNED NOT NULL,
+            status VARCHAR(16) NOT NULL DEFAULT 'draft',
+            note TEXT NULL,
+            created_by_user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            sent_by_user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            received_by_user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            sent_at_gmt DATETIME NULL,
+            received_at_gmt DATETIME NULL,
+            cancelled_at_gmt DATETIME NULL,
+            created_at_gmt DATETIME NOT NULL,
+            updated_at_gmt DATETIME NOT NULL,
+            PRIMARY KEY  (id),
+            KEY idx_status (status),
+            KEY idx_from (from_warehouse_id),
+            KEY idx_to (to_warehouse_id)
+        ) ENGINE=InnoDB {$charset_collate};";
+
+        $sql_stock_transfer_lines = "CREATE TABLE {$stock_transfer_lines} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            transfer_id BIGINT UNSIGNED NOT NULL,
+            product_id BIGINT UNSIGNED NOT NULL,
+            variation_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            qty INT NOT NULL DEFAULT 0,
+            unit_cost_cents BIGINT NULL DEFAULT NULL,
+            created_at_gmt DATETIME NOT NULL,
+            updated_at_gmt DATETIME NOT NULL,
+            PRIMARY KEY  (id),
+            KEY idx_transfer (transfer_id),
+            KEY idx_item (product_id, variation_id)
+        ) ENGINE=InnoDB {$charset_collate};";
+
+        $sql_price_lists = "CREATE TABLE {$price_lists} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            name VARCHAR(191) NOT NULL DEFAULT '',
+            customer_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            supplier_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            currency CHAR(3) NOT NULL DEFAULT 'EUR',
+            valid_from_gmt DATETIME NULL,
+            valid_to_gmt DATETIME NULL,
+            active TINYINT(1) NOT NULL DEFAULT 1,
+            note TEXT NULL,
+            created_by_user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            created_at_gmt DATETIME NOT NULL,
+            updated_at_gmt DATETIME NOT NULL,
+            PRIMARY KEY  (id),
+            KEY idx_customer (customer_id),
+            KEY idx_supplier (supplier_id),
+            KEY idx_active (active)
+        ) ENGINE=InnoDB {$charset_collate};";
+
+        $sql_price_list_items = "CREATE TABLE {$price_list_items} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            price_list_id BIGINT UNSIGNED NOT NULL,
+            product_id BIGINT UNSIGNED NOT NULL,
+            variation_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            price_cents BIGINT NOT NULL DEFAULT 0,
+            min_qty INT NOT NULL DEFAULT 1,
+            created_at_gmt DATETIME NOT NULL,
+            updated_at_gmt DATETIME NOT NULL,
+            PRIMARY KEY  (id),
+            UNIQUE KEY uq_list_item (price_list_id, product_id, variation_id),
+            KEY idx_list (price_list_id),
+            KEY idx_item (product_id, variation_id)
+        ) ENGINE=InnoDB {$charset_collate};";
+
+        $sql_approval_rules = "CREATE TABLE {$approval_rules} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            document_type VARCHAR(32) NOT NULL DEFAULT '',
+            threshold_cents BIGINT NOT NULL DEFAULT 0,
+            required_capability VARCHAR(64) NOT NULL DEFAULT '',
+            active TINYINT(1) NOT NULL DEFAULT 1,
+            note TEXT NULL,
+            created_by_user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            created_at_gmt DATETIME NOT NULL,
+            updated_at_gmt DATETIME NOT NULL,
+            PRIMARY KEY  (id),
+            KEY idx_type (document_type),
+            KEY idx_active (active)
+        ) ENGINE=InnoDB {$charset_collate};";
+
+        $sql_returns = "CREATE TABLE {$returns} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            order_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            customer_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            warehouse_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            status VARCHAR(16) NOT NULL DEFAULT 'requested',
+            reason TEXT NULL,
+            note TEXT NULL,
+            created_by_user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            approved_by_user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            received_by_user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            approved_at_gmt DATETIME NULL,
+            received_at_gmt DATETIME NULL,
+            rejected_at_gmt DATETIME NULL,
+            created_at_gmt DATETIME NOT NULL,
+            updated_at_gmt DATETIME NOT NULL,
+            PRIMARY KEY  (id),
+            KEY idx_order (order_id),
+            KEY idx_customer (customer_id),
+            KEY idx_status (status),
+            KEY idx_warehouse (warehouse_id)
+        ) ENGINE=InnoDB {$charset_collate};";
+
+        $sql_return_lines = "CREATE TABLE {$return_lines} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            return_id BIGINT UNSIGNED NOT NULL,
+            product_id BIGINT UNSIGNED NOT NULL,
+            variation_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            qty INT NOT NULL DEFAULT 0,
+            unit_cost_cents BIGINT NULL DEFAULT NULL,
+            created_at_gmt DATETIME NOT NULL,
+            updated_at_gmt DATETIME NOT NULL,
+            PRIMARY KEY  (id),
+            KEY idx_return (return_id),
+            KEY idx_item (product_id, variation_id)
+        ) ENGINE=InnoDB {$charset_collate};";
+
+        $supplier_prices = self::table_supplier_price_history();
+        $sql_supplier_prices = "CREATE TABLE {$supplier_prices} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            supplier_id BIGINT UNSIGNED NOT NULL,
+            product_id BIGINT UNSIGNED NOT NULL,
+            variation_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            price_cents BIGINT NOT NULL DEFAULT 0,
+            currency VARCHAR(8) NOT NULL DEFAULT 'EUR',
+            recorded_at_gmt DATETIME NOT NULL,
+            note TEXT NULL,
+            created_by_user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            PRIMARY KEY  (id),
+            KEY idx_supplier (supplier_id),
+            KEY idx_item (product_id, variation_id),
+            KEY idx_recorded (recorded_at_gmt)
+        ) ENGINE=InnoDB {$charset_collate};";
+
+        $shipments = self::table_shipments();
+        $sql_shipments = "CREATE TABLE {$shipments} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            reference_type VARCHAR(32) NOT NULL DEFAULT '',
+            reference_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            carrier VARCHAR(64) NOT NULL DEFAULT '',
+            tracking_number VARCHAR(191) NOT NULL DEFAULT '',
+            status VARCHAR(32) NOT NULL DEFAULT 'pending',
+            shipped_at_gmt DATETIME NULL,
+            delivered_at_gmt DATETIME NULL,
+            note TEXT NULL,
+            created_by_user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            created_at_gmt DATETIME NOT NULL,
+            updated_at_gmt DATETIME NOT NULL,
+            PRIMARY KEY  (id),
+            KEY idx_reference (reference_type, reference_id),
+            KEY idx_status (status)
+        ) ENGINE=InnoDB {$charset_collate};";
+
+        $reservations = self::table_reservations();
+        $sql_reservations = "CREATE TABLE {$reservations} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            product_id BIGINT UNSIGNED NOT NULL,
+            variation_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            warehouse_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            qty INT NOT NULL DEFAULT 0,
+            reserved_for VARCHAR(191) NOT NULL DEFAULT '',
+            expires_at_gmt DATETIME NULL,
+            status VARCHAR(16) NOT NULL DEFAULT 'active',
+            note TEXT NULL,
+            created_by_user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            created_at_gmt DATETIME NOT NULL,
+            updated_at_gmt DATETIME NOT NULL,
+            PRIMARY KEY  (id),
+            KEY idx_product (product_id, variation_id),
+            KEY idx_warehouse (warehouse_id),
+            KEY idx_status (status)
+        ) ENGINE=InnoDB {$charset_collate};";
+
+        $payments = self::table_payments();
+        $sql_payments = "CREATE TABLE {$payments} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            reference_type VARCHAR(32) NOT NULL DEFAULT '',
+            reference_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            amount_cents BIGINT NOT NULL DEFAULT 0,
+            currency VARCHAR(8) NOT NULL DEFAULT 'EUR',
+            paid_at_gmt DATETIME NOT NULL,
+            method VARCHAR(32) NOT NULL DEFAULT '',
+            note TEXT NULL,
+            created_by_user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            created_at_gmt DATETIME NOT NULL,
+            PRIMARY KEY  (id),
+            KEY idx_reference (reference_type, reference_id),
+            KEY idx_paid (paid_at_gmt)
+        ) ENGINE=InnoDB {$charset_collate};";
+
+        $kits = self::table_kits();
+        $kit_components = self::table_kit_components();
+        $sql_kits = "CREATE TABLE {$kits} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            name VARCHAR(191) NOT NULL DEFAULT '',
+            product_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            variation_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            sku VARCHAR(191) NOT NULL DEFAULT '',
+            active TINYINT NOT NULL DEFAULT 1,
+            note TEXT NULL,
+            created_by_user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            created_at_gmt DATETIME NOT NULL,
+            updated_at_gmt DATETIME NOT NULL,
+            PRIMARY KEY  (id),
+            KEY idx_product (product_id, variation_id)
+        ) ENGINE=InnoDB {$charset_collate};";
+        $sql_kit_components = "CREATE TABLE {$kit_components} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            kit_id BIGINT UNSIGNED NOT NULL,
+            product_id BIGINT UNSIGNED NOT NULL,
+            variation_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            qty INT NOT NULL DEFAULT 1,
+            PRIMARY KEY  (id),
+            KEY idx_kit (kit_id),
+            KEY idx_item (product_id, variation_id)
+        ) ENGINE=InnoDB {$charset_collate};";
+
+        $documents = self::table_documents();
+        $sql_documents = "CREATE TABLE {$documents} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            document_type VARCHAR(32) NOT NULL DEFAULT '',
+            document_number VARCHAR(64) NOT NULL DEFAULT '',
+            reference_type VARCHAR(32) NOT NULL DEFAULT '',
+            reference_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            status VARCHAR(32) NOT NULL DEFAULT 'draft',
+            issued_at_gmt DATETIME NULL,
+            pdf_path VARCHAR(512) NOT NULL DEFAULT '',
+            note TEXT NULL,
+            created_by_user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            created_at_gmt DATETIME NOT NULL,
+            updated_at_gmt DATETIME NOT NULL,
+            PRIMARY KEY  (id),
+            KEY idx_type (document_type),
+            KEY idx_reference (reference_type, reference_id),
+            KEY idx_number (document_number)
+        ) ENGINE=InnoDB {$charset_collate};";
+
+        $barcodes = self::table_product_barcodes();
+        $sql_barcodes = "CREATE TABLE {$barcodes} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            product_id BIGINT UNSIGNED NOT NULL,
+            variation_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            barcode VARCHAR(64) NOT NULL DEFAULT '',
+            barcode_type VARCHAR(16) NOT NULL DEFAULT 'ean13',
+            created_by_user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            created_at_gmt DATETIME NOT NULL,
+            updated_at_gmt DATETIME NOT NULL,
+            PRIMARY KEY  (id),
+            UNIQUE KEY uq_item (product_id, variation_id),
+            KEY idx_barcode (barcode)
+        ) ENGINE=InnoDB {$charset_collate};";
+
         dbDelta($sql_levels);
         dbDelta($sql_movements);
         dbDelta($sql_moves);
+        // Valore e costo vivono su colonne nullable: dbDelta le aggiunge, ma su
+        // installazioni vecchie un controllo esplicito rende la migrazione
+        // deterministica invece che dipendente dal diff di dbDelta.
+        $levelValueColumns = $wpdb->get_col($wpdb->prepare('SHOW COLUMNS FROM %i LIKE %s', $levels, 'stock_value_cents'));
+        if (empty($levelValueColumns)) {
+            $wpdb->query($wpdb->prepare("ALTER TABLE %i ADD COLUMN stock_value_cents BIGINT NULL DEFAULT NULL AFTER qty", $levels));
+        }
+        $moveCostColumns = $wpdb->get_col($wpdb->prepare('SHOW COLUMNS FROM %i LIKE %s', $moves, 'unit_cost_cents'));
+        if (empty($moveCostColumns)) {
+            $wpdb->query($wpdb->prepare("ALTER TABLE %i ADD COLUMN unit_cost_cents BIGINT NULL DEFAULT NULL AFTER stock_after", $moves));
+        }
+        $moveValueColumns = $wpdb->get_col($wpdb->prepare('SHOW COLUMNS FROM %i LIKE %s', $moves, 'value_delta_cents'));
+        if (empty($moveValueColumns)) {
+            $wpdb->query($wpdb->prepare("ALTER TABLE %i ADD COLUMN value_delta_cents BIGINT NULL DEFAULT NULL AFTER unit_cost_cents", $moves));
+        }
         dbDelta($sql_pos_idempotency);
         dbDelta($sql_pos_shifts);
         dbDelta($sql_pos_receipts);
         dbDelta($sql_pos_receipt_lines);
+        // Lo snapshot di costo delle righe scontrino e' nullable: gli scontrini
+        // emessi prima di S6 non hanno un costo ricostruibile e restano NULL.
+        $receiptLineCostColumns = $wpdb->get_col($wpdb->prepare('SHOW COLUMNS FROM %i LIKE %s', $pos_receipt_lines, 'cost_total_cents'));
+        if (empty($receiptLineCostColumns)) {
+            $wpdb->query($wpdb->prepare("ALTER TABLE %i ADD COLUMN cost_total_cents BIGINT NULL DEFAULT NULL AFTER return_outcome", $pos_receipt_lines));
+        }
+        $receiptLineUnitCostColumns = $wpdb->get_col($wpdb->prepare('SHOW COLUMNS FROM %i LIKE %s', $pos_receipt_lines, 'unit_cost_cents'));
+        if (empty($receiptLineUnitCostColumns)) {
+            $wpdb->query($wpdb->prepare("ALTER TABLE %i ADD COLUMN unit_cost_cents BIGINT NULL DEFAULT NULL AFTER cost_total_cents", $pos_receipt_lines));
+        }
         dbDelta($sql_pos_closings);
         dbDelta($sql_loyalty_cards);
         // Aggiunge la colonna "enabled" se manca dalle installazioni precedenti.
@@ -2954,8 +3516,30 @@ public static function insert_pos_shift($row) {
         dbDelta($sql_backorders);
         dbDelta($sql_count_sessions);
         dbDelta($sql_count_lines);
+        dbDelta($sql_count_schedules);
         dbDelta($sql_reason_codes);
         dbDelta($sql_employees);
+        dbDelta($sql_employee_shifts);
+        dbDelta($sql_employee_documents);
+        dbDelta($sql_product_costs);
+        dbDelta($sql_permission_sets);
+        dbDelta($sql_stock_lots);
+        dbDelta($sql_stock_lots_levels);
+        dbDelta($sql_stock_transfers);
+        dbDelta($sql_stock_transfer_lines);
+        dbDelta($sql_price_lists);
+        dbDelta($sql_price_list_items);
+        dbDelta($sql_approval_rules);
+        dbDelta($sql_returns);
+        dbDelta($sql_return_lines);
+        dbDelta($sql_supplier_prices);
+        dbDelta($sql_shipments);
+        dbDelta($sql_reservations);
+        dbDelta($sql_payments);
+        dbDelta($sql_kits);
+        dbDelta($sql_kit_components);
+        dbDelta($sql_documents);
+        dbDelta($sql_barcodes);
     }
 
     public static function get_site_id_for_warehouse($warehouse_id) {
@@ -3109,7 +3693,7 @@ public static function insert_pos_shift($row) {
         return is_array($rows) ? $rows : array();
     }
 
-    public static function upsert_level($warehouse_id, $product_id, $variation_id, $qty, $room, $rack, $shelf) {
+    public static function upsert_level($warehouse_id, $product_id, $variation_id, $qty, $room, $rack, $shelf, $unit_cost_cents = null) {
         global $wpdb;
         $levels = self::table_levels();
 
@@ -3117,6 +3701,7 @@ public static function insert_pos_shift($row) {
         $product_id = (int) $product_id;
         $variation_id = (int) $variation_id;
         $qty = (int) $qty;
+        $unit_cost_cents = $unit_cost_cents === null ? null : (int) $unit_cost_cents;
         $room = self::sanitize_loc($room);
         $rack = self::sanitize_loc($rack);
         $shelf = self::sanitize_loc($shelf);
@@ -3133,7 +3718,7 @@ public static function insert_pos_shift($row) {
         $now = gmdate('Y-m-d H:i:s');
 
         $existing = $wpdb->get_row($wpdb->prepare(
-            "SELECT id, qty FROM %i WHERE warehouse_id=%d AND product_id=%d AND variation_id=%d AND room=%s AND rack=%s AND shelf=%s",
+            "SELECT id, qty, stock_value_cents FROM %i WHERE warehouse_id=%d AND product_id=%d AND variation_id=%d AND room=%s AND rack=%s AND shelf=%s",
             $levels,
             $warehouse_id,
             $product_id,
@@ -3143,15 +3728,29 @@ public static function insert_pos_shift($row) {
             $shelf
         ), ARRAY_A);
 
+        $old_qty = $existing ? (int) $existing['qty'] : 0;
+        $old_value = $existing && $existing['stock_value_cents'] !== null ? (int) $existing['stock_value_cents'] : null;
+        $new_value = MGWS_Cost_Plan::value_for_quantity($old_value, $old_qty, $qty, $unit_cost_cents);
+        $value_delta = ($old_value !== null && $new_value !== null) ? $new_value - $old_value : null;
+
         if ($existing) {
             $wpdb->update(
                 $levels,
-                array('site_id' => $site_id, 'qty' => $qty, 'updated_at_gmt' => $now),
+                array('site_id' => $site_id, 'qty' => $qty, 'stock_value_cents' => $new_value, 'updated_at_gmt' => $now),
                 array('id' => (int) $existing['id']),
-                array('%d', '%d', '%s'),
+                array('%d', '%d', '%d', '%s'),
                 array('%d')
             );
-            return array('ok' => true, 'old_qty' => (int) $existing['qty'], 'new_qty' => $qty, 'site_id' => $site_id);
+            return array(
+                'ok' => true,
+                'old_qty' => $old_qty,
+                'new_qty' => $qty,
+                'site_id' => $site_id,
+                'old_value_cents' => $old_value,
+                'new_value_cents' => $new_value,
+                'value_delta_cents' => $value_delta,
+                'unit_cost_cents' => $unit_cost_cents,
+            );
         }
 
         $inserted = $wpdb->insert($levels, array(
@@ -3160,6 +3759,7 @@ public static function insert_pos_shift($row) {
             'product_id' => $product_id,
             'variation_id' => $variation_id,
             'qty' => $qty,
+            'stock_value_cents' => $new_value,
             'room' => $room,
             'rack' => $rack,
             'shelf' => $shelf,
@@ -3168,7 +3768,16 @@ public static function insert_pos_shift($row) {
         if (!$inserted) {
             return array('ok' => false, 'message' => __('Could not write the stock level', 'mg-warehouse-stock'));
         }
-        return array('ok' => true, 'old_qty' => 0, 'new_qty' => $qty, 'site_id' => $site_id);
+        return array(
+            'ok' => true,
+            'old_qty' => 0,
+            'new_qty' => $qty,
+            'site_id' => $site_id,
+            'old_value_cents' => null,
+            'new_value_cents' => $new_value,
+            'value_delta_cents' => $new_value,
+            'unit_cost_cents' => $unit_cost_cents,
+        );
     }
 
     /**
@@ -3180,7 +3789,7 @@ public static function insert_pos_shift($row) {
      * viene scartata, non passata a `$wpdb`.
      */
     private static function move_extra_columns() {
-        return array('movement_id', 'stock_before', 'stock_after', 'stock_effect', 'source_type', 'source_id', 'source_line_id', 'reason_code');
+        return array('movement_id', 'stock_before', 'stock_after', 'stock_effect', 'source_type', 'source_id', 'source_line_id', 'reason_code', 'unit_cost_cents', 'value_delta_cents');
     }
 
     public static function insert_move($type, $site_id, $warehouse_id, $product_id, $variation_id, $qty, $room, $rack, $shelf, $user_id, $ref_order_id = 0, $note = null, $warehouse_from = 0, $warehouse_to = 0, array $extra = array()) {
@@ -3214,6 +3823,74 @@ public static function insert_pos_shift($row) {
 
         $inserted = $wpdb->insert($moves, $data);
         return $inserted ? (int) $wpdb->insert_id : 0;
+    }
+
+    /**
+     * Registra nel libro movimenti le righe annullate in cassa.
+     *
+     * Un articolo scansionato e poi tolto dal carrello non arriva mai allo
+     * scontrino, ma deve restare traccia di chi l'ha tolto e quando. La riga
+     * ha tipo `void` e `stock_effect` `none`: la giacenza non cambia, perche'
+     * il pezzo non e' mai uscito.
+     * Records the lines voided at the till. The row has type `void` and
+     * `stock_effect` `none`: stock does not change.
+     *
+     * @return int[] ids delle righe scritte / ids of the written rows
+     */
+    public static function insert_pos_void_moves(array $lines, array $context, $user_id) {
+        $reason = sanitize_key((string) ($context['reason'] ?? ''));
+        if (!in_array($reason, array('line_removed', 'quantity_reduced', 'cart_cleared'), true)) {
+            $reason = 'line_removed';
+        }
+        $receipt_key = sanitize_text_field((string) ($context['receipt_key'] ?? ''));
+        $shift_id = sanitize_text_field((string) ($context['shift_id'] ?? ''));
+        $register = sanitize_text_field((string) ($context['register_name'] ?? ''));
+        $site_id = max(0, (int) ($context['site_id'] ?? 0));
+
+        $ids = array();
+        foreach ($lines as $line) {
+            if (!is_array($line)) {
+                continue;
+            }
+            $product_id = (int) ($line['product_id'] ?? 0);
+            $qty = (int) ($line['quantity'] ?? 0);
+            if ($product_id <= 0 || $qty <= 0) {
+                continue;
+            }
+            $name = sanitize_text_field((string) ($line['name'] ?? ''));
+            $price = (float) ($line['unit_price'] ?? 0);
+            $parts = array(sprintf('Annullato in cassa: %s x%d a %s EUR', $name !== '' ? $name : '#' . $product_id, $qty, number_format($price, 2, '.', '')));
+            if ($receipt_key !== '') {
+                $parts[] = 'scontrino ' . $receipt_key;
+            }
+            if ($register !== '') {
+                $parts[] = 'cassa ' . $register;
+            }
+            if ($shift_id !== '') {
+                $parts[] = 'turno ' . $shift_id;
+            }
+            $id = self::insert_move(
+                'void',
+                $site_id,
+                0,
+                $product_id,
+                max(0, (int) ($line['variation_id'] ?? 0)),
+                $qty,
+                '',
+                '',
+                '',
+                (int) $user_id,
+                0,
+                implode(' · ', $parts),
+                0,
+                0,
+                array('stock_effect' => 'none', 'source_type' => 'pos_void', 'reason_code' => $reason)
+            );
+            if ($id > 0) {
+                $ids[] = $id;
+            }
+        }
+        return $ids;
     }
 
     /**
@@ -3364,7 +4041,7 @@ public static function insert_pos_shift($row) {
         return $wpdb->get_row($wpdb->prepare('SELECT * FROM %i WHERE id = %d', self::table_moves(), (int) $movement_id), ARRAY_A);
     }
 
-    public static function insert_inventory_count_move($site_id, $warehouse_id, $product_id, $variation_id, $qty, $room, $rack, $shelf, $user_id, $session_id, $line_id, $reason_code, $note) {
+    public static function insert_inventory_count_move($site_id, $warehouse_id, $product_id, $variation_id, $qty, $room, $rack, $shelf, $user_id, $session_id, $line_id, $reason_code, $note, $unit_cost_cents = null, $value_delta_cents = null) {
         global $wpdb;
         $inserted = $wpdb->insert(self::table_moves(), array(
             'ts_gmt' => gmdate('Y-m-d H:i:s'),
@@ -3387,11 +4064,13 @@ public static function insert_pos_shift($row) {
             'source_line_id' => (int) $line_id,
             'reason_code' => self::sanitize_loc($reason_code),
             'note' => $note,
+            'unit_cost_cents' => $unit_cost_cents === null ? null : (int) $unit_cost_cents,
+            'value_delta_cents' => $value_delta_cents === null ? null : (int) $value_delta_cents,
         ));
         return $inserted ? (int) $wpdb->insert_id : 0;
     }
 
-    public static function insert_quick_load_move($site_id, $warehouse_id, $product_id, $variation_id, $qty, $room, $rack, $shelf, $user_id, $note, $movement_id = 0, $stock_before = null, $stock_after = null) {
+    public static function insert_quick_load_move($site_id, $warehouse_id, $product_id, $variation_id, $qty, $room, $rack, $shelf, $user_id, $note, $movement_id = 0, $stock_before = null, $stock_after = null, $unit_cost_cents = null, $value_delta_cents = null) {
         global $wpdb;
         $inserted = $wpdb->insert(self::table_moves(), array(
             'ts_gmt' => gmdate('Y-m-d H:i:s'),
@@ -3417,11 +4096,13 @@ public static function insert_pos_shift($row) {
             'movement_id' => (int) $movement_id,
             'stock_before' => $stock_before === null ? null : (int) $stock_before,
             'stock_after' => $stock_after === null ? null : (int) $stock_after,
+            'unit_cost_cents' => $unit_cost_cents === null ? null : (int) $unit_cost_cents,
+            'value_delta_cents' => $value_delta_cents === null ? null : (int) $value_delta_cents,
         ));
         return $inserted ? (int) $wpdb->insert_id : 0;
     }
 
-    public static function insert_receipt_move($site_id, $warehouse_id, $product_id, $variation_id, $qty, $room, $rack, $shelf, $user_id, $receipt_id, $receipt_line_id, $reason_code, $note) {
+    public static function insert_receipt_move($site_id, $warehouse_id, $product_id, $variation_id, $qty, $room, $rack, $shelf, $user_id, $receipt_id, $receipt_line_id, $reason_code, $note, $unit_cost_cents = null, $value_delta_cents = null) {
         global $wpdb;
         $inserted = $wpdb->insert(self::table_moves(), array(
             'ts_gmt' => gmdate('Y-m-d H:i:s'),
@@ -3444,6 +4125,8 @@ public static function insert_pos_shift($row) {
             'source_line_id' => (int) $receipt_line_id,
             'reason_code' => self::sanitize_loc($reason_code),
             'note' => $note,
+            'unit_cost_cents' => $unit_cost_cents === null ? null : (int) $unit_cost_cents,
+            'value_delta_cents' => $value_delta_cents === null ? null : (int) $value_delta_cents,
         ));
         return $inserted ? (int) $wpdb->insert_id : 0;
     }
@@ -3470,7 +4153,7 @@ public static function insert_pos_shift($row) {
         ), ARRAY_A);
     }
 
-    public static function apply_delta_level($warehouse_id, $product_id, $variation_id, $delta_qty, $room, $rack, $shelf) {
+    public static function apply_delta_level($warehouse_id, $product_id, $variation_id, $delta_qty, $room, $rack, $shelf, $unit_cost_cents = null) {
         global $wpdb;
         $levels = self::table_levels();
 
@@ -3478,6 +4161,7 @@ public static function insert_pos_shift($row) {
         $product_id = (int) $product_id;
         $variation_id = (int) $variation_id;
         $delta_qty = (int) $delta_qty;
+        $unit_cost_cents = $unit_cost_cents === null ? null : (int) $unit_cost_cents;
         $room = self::sanitize_loc($room);
         $rack = self::sanitize_loc($rack);
         $shelf = self::sanitize_loc($shelf);
@@ -3493,50 +4177,450 @@ public static function insert_pos_shift($row) {
 
         $now = gmdate('Y-m-d H:i:s');
 
-        // Try update first.
-        $updated = $wpdb->query($wpdb->prepare(
-            "UPDATE %i
-             SET qty = qty + %d, site_id=%d, updated_at_gmt=%s
-             WHERE warehouse_id=%d AND product_id=%d AND variation_id=%d AND room=%s AND rack=%s AND shelf=%s
-               AND (qty + %d) >= 0",
+        // The old value is read only to report the delta on the movement row. The
+        // stored value is recomputed by the UPDATE below, atomically with the
+        // quantity, so a concurrent move cannot leave the two out of step.
+        $before = $wpdb->get_row($wpdb->prepare(
+            "SELECT qty, stock_value_cents FROM %i WHERE warehouse_id=%d AND product_id=%d AND variation_id=%d AND room=%s AND rack=%s AND shelf=%s",
             $levels,
-            $delta_qty,
-            $site_id,
-            $now,
             $warehouse_id,
             $product_id,
             $variation_id,
             $room,
             $rack,
-            $shelf,
-            $delta_qty
-        ));
+            $shelf
+        ), ARRAY_A);
+        $old_qty = $before ? (int) $before['qty'] : 0;
+        $old_value = $before && $before['stock_value_cents'] !== null ? (int) $before['stock_value_cents'] : null;
+
+        // Try update first. The value is assigned before the quantity on purpose:
+        // MySQL evaluates SET left to right, and the average-cost branch needs the
+        // quantity the level had before the move.
+        if ($unit_cost_cents === null) {
+            $updated = $wpdb->query($wpdb->prepare(
+                "UPDATE %i
+                 SET stock_value_cents = CASE
+                        WHEN stock_value_cents IS NULL THEN NULL
+                        WHEN qty = 0 THEN NULL
+                        ELSE GREATEST(0, stock_value_cents + ROUND(stock_value_cents / qty) * %d)
+                     END,
+                     qty = qty + %d, site_id=%d, updated_at_gmt=%s
+                 WHERE warehouse_id=%d AND product_id=%d AND variation_id=%d AND room=%s AND rack=%s AND shelf=%s
+                   AND (qty + %d) >= 0",
+                $levels,
+                $delta_qty,
+                $delta_qty,
+                $site_id,
+                $now,
+                $warehouse_id,
+                $product_id,
+                $variation_id,
+                $room,
+                $rack,
+                $shelf,
+                $delta_qty
+            ));
+        } else {
+            $updated = $wpdb->query($wpdb->prepare(
+                "UPDATE %i
+                 SET stock_value_cents = CASE
+                        WHEN %d > 0 THEN
+                            CASE WHEN stock_value_cents IS NULL AND qty > 0 THEN NULL
+                                 ELSE COALESCE(stock_value_cents, 0) + (%d * %d) END
+                        WHEN stock_value_cents IS NULL THEN NULL
+                        WHEN qty = 0 THEN NULL
+                        ELSE GREATEST(0, stock_value_cents + ROUND(stock_value_cents / qty) * %d)
+                     END,
+                     qty = qty + %d, site_id=%d, updated_at_gmt=%s
+                 WHERE warehouse_id=%d AND product_id=%d AND variation_id=%d AND room=%s AND rack=%s AND shelf=%s
+                   AND (qty + %d) >= 0",
+                $levels,
+                $delta_qty,
+                $delta_qty,
+                $unit_cost_cents,
+                $delta_qty,
+                $delta_qty,
+                $site_id,
+                $now,
+                $warehouse_id,
+                $product_id,
+                $variation_id,
+                $room,
+                $rack,
+                $shelf,
+                $delta_qty
+            ));
+        }
 
         if ((int) $updated === 1) {
-            $new_qty = self::get_level_row($warehouse_id, $product_id, $variation_id, $room, $rack, $shelf);
-            return array('ok' => true, 'site_id' => $site_id, 'new_qty' => (int) ($new_qty['qty'] ?? 0));
+            $row = self::get_level_row($warehouse_id, $product_id, $variation_id, $room, $rack, $shelf);
+            $new_value = $row && $row['stock_value_cents'] !== null ? (int) $row['stock_value_cents'] : null;
+            return array(
+                'ok' => true,
+                'site_id' => $site_id,
+                'old_qty' => $old_qty,
+                'new_qty' => (int) ($row['qty'] ?? 0),
+                'old_value_cents' => $old_value,
+                'new_value_cents' => $new_value,
+                'value_delta_cents' => ($old_value !== null && $new_value !== null) ? $new_value - $old_value : null,
+                'unit_cost_cents' => $unit_cost_cents,
+            );
         }
 
         // If missing and delta positive, insert.
         if ($delta_qty > 0) {
+            $new_value = $unit_cost_cents === null ? null : $delta_qty * $unit_cost_cents;
             $inserted = $wpdb->insert($levels, array(
                 'site_id' => $site_id,
                 'warehouse_id' => $warehouse_id,
                 'product_id' => $product_id,
                 'variation_id' => $variation_id,
                 'qty' => $delta_qty,
+                'stock_value_cents' => $new_value,
                 'room' => $room,
                 'rack' => $rack,
                 'shelf' => $shelf,
                 'updated_at_gmt' => $now,
             ));
             if ($inserted) {
-                return array('ok' => true, 'site_id' => $site_id, 'new_qty' => $delta_qty);
+                return array(
+                    'ok' => true,
+                    'site_id' => $site_id,
+                    'old_qty' => 0,
+                    'new_qty' => $delta_qty,
+                    'old_value_cents' => null,
+                    'new_value_cents' => $new_value,
+                    'value_delta_cents' => $new_value,
+                    'unit_cost_cents' => $unit_cost_cents,
+                );
             }
             return array('ok' => false, 'message' => __('Could not write the stock level', 'mg-warehouse-stock'));
         }
 
         return array('ok' => false, 'message' => __('Not enough stock, or no such stock level', 'mg-warehouse-stock'));
+    }
+
+    // ---- Declared costs
+
+    /**
+     * The current declared cost of an item, in minor units.
+     *
+     * A variation inherits the parent's cost only when it has no declaration of
+     * its own. The reverse is never true: a variation's cost does not describe
+     * the parent, and picking one of many variations would be a guess. A row
+     * with a null cost is a withdrawal, not a gap: the item has no cost until
+     * someone declares a new one, and falling back to an older amount would
+     * resurrect a number the shop explicitly removed.
+     *
+     * @param int $product_id
+     * @param int $variation_id
+     * @return array|null The whole row, or null when no cost was ever declared.
+     */
+    public static function get_latest_declared_cost($product_id, $variation_id = 0) {
+        global $wpdb;
+        $table = self::table_product_costs();
+        $product_id = (int) $product_id;
+        $variation_id = (int) $variation_id;
+        if ($product_id <= 0) {
+            return null;
+        }
+        $row = $wpdb->get_row($wpdb->prepare(
+            'SELECT * FROM %i WHERE product_id = %d AND variation_id = %d ORDER BY valid_from_gmt DESC, id DESC LIMIT 1',
+            $table,
+            $product_id,
+            $variation_id
+        ), ARRAY_A);
+        if (is_array($row)) {
+            return $row;
+        }
+        if ($variation_id > 0) {
+            $row = $wpdb->get_row($wpdb->prepare(
+                'SELECT * FROM %i WHERE product_id = %d AND variation_id = 0 ORDER BY valid_from_gmt DESC, id DESC LIMIT 1',
+                $table,
+                $product_id
+            ), ARRAY_A);
+            if (is_array($row)) {
+                return $row;
+            }
+        }
+        return null;
+    }
+
+    public static function get_declared_cost_history($product_id, $variation_id = 0, $limit = 50) {
+        global $wpdb;
+        return $wpdb->get_results($wpdb->prepare(
+            'SELECT * FROM %i WHERE product_id = %d AND variation_id = %d ORDER BY valid_from_gmt DESC, id DESC LIMIT %d',
+            self::table_product_costs(),
+            (int) $product_id,
+            (int) $variation_id,
+            max(1, min(200, (int) $limit))
+        ), ARRAY_A);
+    }
+
+    /**
+     * Appends a declared cost. The table is append-only: there is no update path
+     * and no delete path, so a correction is a new row with a later validity.
+     *
+     * @return int Row id, 0 on failure.
+     */
+    public static function insert_declared_cost($product_id, $variation_id, $cost_cents, $valid_from_gmt, $source, $note, $created_by) {
+        global $wpdb;
+        $inserted = $wpdb->insert(self::table_product_costs(), array(
+            'product_id' => (int) $product_id,
+            'variation_id' => (int) $variation_id,
+            'cost_cents' => $cost_cents === null ? null : (int) $cost_cents,
+            'valid_from_gmt' => (string) $valid_from_gmt,
+            'source' => (string) $source,
+            'note' => $note === null ? null : (string) $note,
+            'created_by' => (int) $created_by,
+            'created_at_gmt' => gmdate('Y-m-d H:i:s'),
+        ));
+        return $inserted ? (int) $wpdb->insert_id : 0;
+    }
+
+    /**
+     * @return array<string,bool> Keys are "product:variation".
+     */
+    public static function existing_declared_items() {
+        global $wpdb;
+        $rows = $wpdb->get_results($wpdb->prepare('SELECT DISTINCT product_id, variation_id FROM %i', self::table_product_costs()), ARRAY_A);
+        $items = array();
+        foreach ((array) $rows as $row) {
+            $items[(int) $row['product_id'] . ':' . (int) $row['variation_id']] = true;
+        }
+        return $items;
+    }
+
+    /**
+     * The latest non-zero unit cost per item from the purchase documents that
+     * already exist, newest first.
+     *
+     * Zero is treated as "not entered", not as "free": the columns are NOT NULL
+     * DEFAULT 0, so zero is what an unfilled field looks like.
+     *
+     * @return array<int,array{product_id:int,variation_id:int,unit_cost:string,ts:string,source:string}>
+     */
+    public static function backfill_cost_candidates() {
+        global $wpdb;
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT product_id, variation_id, unit_cost, ts, source FROM ("
+            . ' SELECT pol.product_id, pol.variation_id, pol.unit_cost, COALESCE(po.ordered_at_gmt, po.created_at_gmt) AS ts, %s AS source'
+            . ' FROM %i pol INNER JOIN %i po ON po.id = pol.purchase_order_id WHERE pol.unit_cost > 0'
+            . ' UNION ALL'
+            . ' SELECT rl.product_id, rl.variation_id, rl.unit_cost, COALESCE(r.received_at_gmt, r.created_at_gmt) AS ts, %s AS source'
+            . ' FROM %i rl INNER JOIN %i r ON r.id = rl.receipt_id WHERE rl.unit_cost > 0'
+            . ') candidates ORDER BY ts DESC, product_id ASC, variation_id ASC',
+            'backfill_po',
+            self::table_purchase_order_lines(),
+            self::table_purchase_orders(),
+            'backfill_receipt',
+            self::table_receipt_lines(),
+            self::table_receipts()
+        ), ARRAY_A);
+
+        $latest = array();
+        foreach ((array) $rows as $row) {
+            $key = (int) $row['product_id'] . ':' . (int) $row['variation_id'];
+            if (!isset($latest[$key])) {
+                $latest[$key] = array(
+                    'product_id' => (int) $row['product_id'],
+                    'variation_id' => (int) $row['variation_id'],
+                    'unit_cost' => (string) $row['unit_cost'],
+                    'ts' => (string) $row['ts'],
+                    'source' => (string) $row['source'],
+                );
+            }
+        }
+        return array_values($latest);
+    }
+
+    /**
+     * Levels whose value was never computed.
+     *
+     * @return array<int,array>
+     */
+    public static function levels_without_value() {
+        global $wpdb;
+        return $wpdb->get_results($wpdb->prepare(
+            'SELECT id, product_id, variation_id, qty FROM %i WHERE stock_value_cents IS NULL ORDER BY id ASC',
+            self::table_levels()
+        ), ARRAY_A);
+    }
+
+    public static function set_level_value($level_id, $value_cents) {
+        global $wpdb;
+        return (bool) $wpdb->update(
+            self::table_levels(),
+            array(
+                'stock_value_cents' => $value_cents === null ? null : (int) $value_cents,
+                'updated_at_gmt' => gmdate('Y-m-d H:i:s'),
+            ),
+            array('id' => (int) $level_id),
+            array('%d', '%s'),
+            array('%d')
+        );
+    }
+
+    public static function sum_value_for_item($product_id, $variation_id = 0) {
+        global $wpdb;
+        $row = $wpdb->get_row($wpdb->prepare(
+            'SELECT COALESCE(SUM(qty), 0) AS qty,'
+            . ' COALESCE(SUM(CASE WHEN stock_value_cents IS NULL THEN 0 ELSE stock_value_cents END), 0) AS value_cents,'
+            . ' COALESCE(SUM(CASE WHEN stock_value_cents IS NULL THEN qty ELSE 0 END), 0) AS unvalued_qty'
+            . ' FROM %i WHERE product_id = %d AND variation_id = %d',
+            self::table_levels(),
+            (int) $product_id,
+            (int) $variation_id
+        ), ARRAY_A);
+        return is_array($row) ? $row : array('qty' => 0, 'value_cents' => 0, 'unvalued_qty' => 0);
+    }
+
+    /**
+     * Coverage counters for the cost report. Only levels that hold stock count:
+     * an empty level has no value to report and no missing cost to flag.
+     *
+     * @return array
+     */
+    public static function cost_report_stats() {
+        global $wpdb;
+        $row = $wpdb->get_row($wpdb->prepare(
+            'SELECT COUNT(*) AS levels,'
+            . ' COUNT(DISTINCT CONCAT(product_id, ":", variation_id)) AS items,'
+            . ' COALESCE(SUM(qty), 0) AS qty,'
+            . ' COALESCE(SUM(CASE WHEN stock_value_cents IS NOT NULL THEN qty ELSE 0 END), 0) AS valued_qty,'
+            . ' COALESCE(SUM(CASE WHEN stock_value_cents IS NULL THEN qty ELSE 0 END), 0) AS unvalued_qty,'
+            . ' COALESCE(SUM(COALESCE(stock_value_cents, 0)), 0) AS total_value_cents,'
+            . ' COUNT(DISTINCT CASE WHEN stock_value_cents IS NULL THEN CONCAT(product_id, ":", variation_id) END) AS items_without_cost'
+            . ' FROM %i WHERE qty > 0',
+            self::table_levels()
+        ), ARRAY_A);
+        if (!is_array($row)) {
+            return array(
+                'levels' => 0,
+                'items' => 0,
+                'qty' => 0,
+                'valued_qty' => 0,
+                'unvalued_qty' => 0,
+                'total_value_cents' => 0,
+                'items_without_cost' => 0,
+            );
+        }
+        foreach (array('levels', 'items', 'qty', 'valued_qty', 'unvalued_qty', 'total_value_cents', 'items_without_cost') as $key) {
+            $row[$key] = (int) ($row[$key] ?? 0);
+        }
+        return $row;
+    }
+
+    public static function count_declared_items() {
+        global $wpdb;
+        return (int) $wpdb->get_var($wpdb->prepare(
+            'SELECT COUNT(DISTINCT CONCAT(product_id, ":", variation_id)) FROM %i WHERE cost_cents IS NOT NULL',
+            self::table_product_costs()
+        ));
+    }
+
+    /**
+     * Levels a revaluation would touch, and what they are worth now.
+     *
+     * The declared cost of a variation without a declaration of its own is the
+     * parent's cost, so a parent revaluation also covers those variations. A
+     * variation that declared a cost and then withdrew it is excluded: a
+     * withdrawal is a decision, not a gap.
+     *
+     * @return array{levels:int,qty:int,value_cents:int}
+     */
+    public static function revalue_plan($product_id, $variation_id = 0) {
+        global $wpdb;
+        list($where, $params) = self::revalue_where($product_id, $variation_id);
+        $row = $wpdb->get_row($wpdb->prepare(
+            'SELECT COUNT(*) AS levels, COALESCE(SUM(qty), 0) AS qty,'
+            . ' COALESCE(SUM(COALESCE(stock_value_cents, 0)), 0) AS value_cents'
+            . ' FROM %i WHERE ' . $where,
+            array_merge(array(self::table_levels()), $params)
+        ), ARRAY_A);
+        if (!is_array($row)) {
+            return array('levels' => 0, 'qty' => 0, 'value_cents' => 0);
+        }
+        return array(
+            'levels' => (int) ($row['levels'] ?? 0),
+            'qty' => (int) ($row['qty'] ?? 0),
+            'value_cents' => (int) ($row['value_cents'] ?? 0),
+        );
+    }
+
+    /**
+     * Sets the value of every level in [revalue_plan] to quantity times cost.
+     *
+     * No movement is written: the quantity does not change, only what the
+     * pieces are worth. This is the only path that changes a value without a
+     * movement, which is why the declaration note records it.
+     *
+     * @return int Levels updated.
+     */
+    public static function revalue_apply($product_id, $variation_id, $cost_cents) {
+        global $wpdb;
+        list($where, $params) = self::revalue_where($product_id, $variation_id);
+        $affected = $wpdb->query($wpdb->prepare(
+            'UPDATE %i SET stock_value_cents = qty * %d, updated_at_gmt = %s WHERE ' . $where,
+            array_merge(array(self::table_levels(), (int) $cost_cents, gmdate('Y-m-d H:i:s')), $params)
+        ));
+        return $affected === false ? 0 : (int) $affected;
+    }
+
+    /**
+     * WHERE clause shared by the revaluation read and write, so the two can
+     * never disagree about which levels the item owns.
+     *
+     * @return array{0:string,1:array<int,int>}
+     */
+    private static function revalue_where($product_id, $variation_id) {
+        $product_id = (int) $product_id;
+        $variation_id = (int) $variation_id;
+        if ($variation_id > 0) {
+            return array('product_id = %d AND variation_id = %d', array($product_id, $variation_id));
+        }
+        return array(
+            'product_id = %d AND (variation_id = 0 OR variation_id NOT IN ('
+            . 'SELECT DISTINCT variation_id FROM %i WHERE product_id = %d AND variation_id > 0))',
+            array($product_id, self::table_product_costs(), $product_id),
+        );
+    }
+
+    /**
+     * Items holding stock with at least one level whose value is unknown.
+     *
+     * "Without cost" means "without value", not "without a declared cost": an
+     * item valued by real receipts needs no declaration. What blocks a margin
+     * is stock that cannot be valued.
+     *
+     * @return array<int,array>
+     */
+    public static function missing_cost_items($limit = 100, $offset = 0) {
+        global $wpdb;
+        $limit = max(1, min(500, (int) $limit));
+        $offset = max(0, (int) $offset);
+        $rows = $wpdb->get_results($wpdb->prepare(
+            'SELECT product_id, variation_id, COALESCE(SUM(qty), 0) AS qty,'
+            . ' COALESCE(SUM(CASE WHEN stock_value_cents IS NULL THEN qty ELSE 0 END), 0) AS unvalued_qty'
+            . ' FROM %i GROUP BY product_id, variation_id'
+            . ' HAVING unvalued_qty > 0'
+            . ' ORDER BY unvalued_qty DESC, product_id ASC, variation_id ASC'
+            . ' LIMIT %d OFFSET %d',
+            self::table_levels(),
+            $limit,
+            $offset
+        ), ARRAY_A);
+        return is_array($rows) ? $rows : array();
+    }
+
+    public static function count_missing_cost_items() {
+        global $wpdb;
+        return (int) $wpdb->get_var($wpdb->prepare(
+            'SELECT COUNT(*) FROM (SELECT product_id, variation_id FROM %i'
+            . ' GROUP BY product_id, variation_id'
+            . ' HAVING COALESCE(SUM(CASE WHEN stock_value_cents IS NULL THEN qty ELSE 0 END), 0) > 0) missing',
+            self::table_levels()
+        ));
     }
 
     public static function get_moves($filters = array(), $limit = 200) {
@@ -3760,6 +4844,146 @@ public static function insert_pos_shift($row) {
                 'warehouse_id' => $warehouse_id,
                 'warehouse_from' => $warehouse_id,
                 'warehouse_to' => 0,
+                'product_id' => $product_id,
+                'variation_id' => $variation_id,
+                'qty' => $use_qty,
+                'room' => $room,
+                'rack' => $rack,
+                'shelf' => $shelf,
+                'ref_order_id' => (int) $order_id,
+                'note' => null,
+            ));
+            if (!$inserted) {
+                $wpdb->query('ROLLBACK');
+                return array('ok' => false, 'message' => __('Could not save the movement', 'mg-warehouse-stock'));
+            }
+        }
+        $wpdb->query('COMMIT');
+        return array('ok' => true, 'message' => 'OK');
+    }
+
+    /**
+     * Movimenti registrati per un ordine, in ordine cronologico.
+     *
+     * L'ordine e' il riferimento che lega movimenti diversi alla stessa
+     * vendita: l'annullamento li rilegge per sapere esattamente cosa
+     * restituire e su quale scaffale.
+     *
+     * Movements recorded for an order, oldest first. The order reference ties
+     * several movements to the same sale, so a cancellation can read exactly
+     * what to give back and to which shelf.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public static function get_moves_for_order($order_id) {
+        global $wpdb;
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            'SELECT * FROM %i WHERE ref_order_id = %d ORDER BY id ASC',
+            self::table_moves(),
+            (int) $order_id
+        ), ARRAY_A);
+
+        return is_array($rows) ? $rows : array();
+    }
+
+    /**
+     * Restituisce ai livelli i pezzi di un ordine annullato o rimborsato.
+     *
+     * Stessa forma di `commit_order_accept()`, segno opposto: un solo
+     * movimento `in` per allocazione, con lo stesso `ref_order_id`, cosi' lo
+     * storico dell'ordine resta leggibile in entrambe le direzioni.
+     *
+     * Gives an order's pieces back to the levels. Same shape as
+     * `commit_order_accept()`, opposite sign: one `in` movement per
+     * allocation, with the same `ref_order_id`, so the order history reads in
+     * both directions.
+     *
+     * @return array{ok:bool,message?:string}
+     */
+    public static function commit_order_release($order_id, $user_id, $allocations) {
+        global $wpdb;
+        $levels = self::table_levels();
+        $moves = self::table_moves();
+
+        $wpdb->query('START TRANSACTION');
+        foreach ($allocations as $a) {
+            $site_id = (int) $a['site_id'];
+            $warehouse_id = (int) $a['warehouse_id'];
+            $product_id = (int) $a['product_id'];
+            $variation_id = (int) $a['variation_id'];
+            $use_qty = (int) $a['use_qty'];
+            $room = self::sanitize_loc($a['room'] ?? '');
+            $rack = self::sanitize_loc($a['rack'] ?? '');
+            $shelf = self::sanitize_loc($a['shelf'] ?? '');
+
+            if ($use_qty <= 0) {
+                continue;
+            }
+            if (!self::warehouse_allows_location($warehouse_id, $room, $rack, $shelf)) {
+                $wpdb->query('ROLLBACK');
+                return array('ok' => false, 'message' => __('Location is not linked to this warehouse. Link the shelves in WooCommerce → Warehouse.', 'mg-warehouse-stock'));
+            }
+
+            // Il livello puo' non esistere piu': l'ordine torna comunque,
+            // quindi lo si ricrea invece di perdere i pezzi.
+            // The level may no longer exist: the order still comes back, so it
+            // is recreated instead of losing the pieces.
+            $existing = $wpdb->get_var($wpdb->prepare(
+                'SELECT id FROM %i WHERE site_id = %d AND warehouse_id = %d AND product_id = %d
+                   AND variation_id = %d AND room = %s AND rack = %s AND shelf = %s LIMIT 1',
+                $levels,
+                $site_id,
+                $warehouse_id,
+                $product_id,
+                $variation_id,
+                $room,
+                $rack,
+                $shelf
+            ));
+            if ($existing === null) {
+                $wpdb->insert($levels, array(
+                    'site_id' => $site_id,
+                    'warehouse_id' => $warehouse_id,
+                    'product_id' => $product_id,
+                    'variation_id' => $variation_id,
+                    'room' => $room,
+                    'rack' => $rack,
+                    'shelf' => $shelf,
+                    'qty' => 0,
+                    'created_at_gmt' => gmdate('Y-m-d H:i:s'),
+                    'updated_at_gmt' => gmdate('Y-m-d H:i:s'),
+                ));
+            }
+
+            $updated = $wpdb->query($wpdb->prepare(
+                'UPDATE %i SET qty = qty + %d, updated_at_gmt = %s
+                 WHERE site_id = %d AND warehouse_id = %d AND product_id = %d AND variation_id = %d
+                   AND room = %s AND rack = %s AND shelf = %s',
+                $levels,
+                $use_qty,
+                gmdate('Y-m-d H:i:s'),
+                $site_id,
+                $warehouse_id,
+                $product_id,
+                $variation_id,
+                $room,
+                $rack,
+                $shelf
+            ));
+            if ((int) $updated !== 1) {
+                $wpdb->query('ROLLBACK');
+                return array('ok' => false, 'message' => __('Could not restore the stock', 'mg-warehouse-stock'));
+            }
+
+            $inserted = $wpdb->insert($moves, array(
+                'ts_gmt' => gmdate('Y-m-d H:i:s'),
+                'user_id' => (int) $user_id,
+                'type' => 'in',
+                'site_id' => $site_id,
+                'warehouse_id' => $warehouse_id,
+                'warehouse_from' => 0,
+                'warehouse_to' => $warehouse_id,
                 'product_id' => $product_id,
                 'variation_id' => $variation_id,
                 'qty' => $use_qty,

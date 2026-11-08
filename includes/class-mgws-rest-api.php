@@ -202,6 +202,75 @@ class MGWS_REST_API {
             ),
         ));
 
+        register_rest_route('mgws/v1', '/employees/(?P<employee_id>\d+)/shifts', array(
+            array(
+                'methods' => 'GET',
+                'permission_callback' => array($this, 'perm_manage_employees'),
+                'callback' => array($this, 'route_employee_shifts_list'),
+                'args' => array('employee_id' => $this->inventory_positive_int_arg()),
+            ),
+            array(
+                'methods' => 'POST',
+                'permission_callback' => array($this, 'perm_manage_employees'),
+                'callback' => array($this, 'route_employee_shift_create'),
+                'args' => array('employee_id' => $this->inventory_positive_int_arg()),
+            ),
+        ));
+        register_rest_route('mgws/v1', '/employees/(?P<employee_id>\d+)/shifts/generate', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_manage_employees'),
+            'callback' => array($this, 'route_employee_shifts_generate'),
+            'args' => array('employee_id' => $this->inventory_positive_int_arg()),
+        ));
+        register_rest_route('mgws/v1', '/employees/(?P<employee_id>\d+)/shifts/(?P<shift_id>\d+)', array(
+            array(
+                'methods' => 'PATCH',
+                'permission_callback' => array($this, 'perm_manage_employees'),
+                'callback' => array($this, 'route_employee_shift_update'),
+                'args' => array('employee_id' => $this->inventory_positive_int_arg(), 'shift_id' => $this->inventory_positive_int_arg()),
+            ),
+            array(
+                'methods' => 'DELETE',
+                'permission_callback' => array($this, 'perm_manage_employees'),
+                'callback' => array($this, 'route_employee_shift_delete'),
+                'args' => array('employee_id' => $this->inventory_positive_int_arg(), 'shift_id' => $this->inventory_positive_int_arg()),
+            ),
+        ));
+        register_rest_route('mgws/v1', '/employees/(?P<employee_id>\d+)/documents', array(
+            array(
+                'methods' => 'GET',
+                'permission_callback' => array($this, 'perm_manage_employees'),
+                'callback' => array($this, 'route_employee_documents_list'),
+                'args' => array('employee_id' => $this->inventory_positive_int_arg()),
+            ),
+            array(
+                'methods' => 'POST',
+                'permission_callback' => array($this, 'perm_manage_employees'),
+                'callback' => array($this, 'route_employee_document_upload'),
+                'args' => array('employee_id' => $this->inventory_positive_int_arg()),
+            ),
+        ));
+        register_rest_route('mgws/v1', '/employees/(?P<employee_id>\d+)/documents/(?P<document_id>\d+)', array(
+            array(
+                'methods' => 'GET',
+                'permission_callback' => array($this, 'perm_manage_employees'),
+                'callback' => array($this, 'route_employee_document_download'),
+                'args' => array('employee_id' => $this->inventory_positive_int_arg(), 'document_id' => $this->inventory_positive_int_arg()),
+            ),
+            array(
+                'methods' => 'DELETE',
+                'permission_callback' => array($this, 'perm_manage_employees'),
+                'callback' => array($this, 'route_employee_document_delete'),
+                'args' => array('employee_id' => $this->inventory_positive_int_arg(), 'document_id' => $this->inventory_positive_int_arg()),
+            ),
+        ));
+        register_rest_route('mgws/v1', '/employees/linkable-users', array(
+            'methods' => 'GET',
+            'permission_callback' => array($this, 'perm_manage_employees'),
+            'callback' => array($this, 'route_employee_linkable_users'),
+            'args' => array('search' => $this->inventory_text_arg()),
+        ));
+
         register_rest_route('mgws/v1', '/employees/(?P<employee_id>\d+)', array(
             array(
                 'methods' => 'GET',
@@ -220,6 +289,351 @@ class MGWS_REST_API {
                 'permission_callback' => array($this, 'perm_manage_employees'),
                 'callback' => array($this, 'route_employee_delete'),
                 'args' => array('employee_id' => $this->inventory_positive_int_arg()),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/permission-sets', array(
+            array(
+                'methods' => 'GET',
+                'permission_callback' => array($this, 'perm_roles_read'),
+                'callback' => array($this, 'route_permission_sets_list'),
+                'args' => $this->empty_route_args(),
+            ),
+            array(
+                'methods' => 'POST',
+                'permission_callback' => array($this, 'perm_roles_manage'),
+                'callback' => array($this, 'route_permission_set_create'),
+                'args' => $this->empty_route_args(),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/permission-sets/(?P<set_id>\d+)', array(
+            array(
+                'methods' => 'PATCH',
+                'permission_callback' => array($this, 'perm_roles_manage'),
+                'callback' => array($this, 'route_permission_set_update'),
+                'args' => array('set_id' => $this->inventory_positive_int_arg()),
+            ),
+            array(
+                'methods' => 'DELETE',
+                'permission_callback' => array($this, 'perm_roles_manage'),
+                'callback' => array($this, 'route_permission_set_delete'),
+                'args' => array('set_id' => $this->inventory_positive_int_arg()),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/lots', array(
+            array(
+                'methods' => 'GET',
+                'permission_callback' => array($this, 'perm_lots_read'),
+                'callback' => array($this, 'route_lots_list'),
+                'args' => array(
+                    'product_id' => $this->inventory_positive_int_arg(),
+                    'variation_id' => $this->inventory_non_negative_int_arg(0),
+                    'limit' => $this->inventory_non_negative_int_arg(100),
+                    'offset' => $this->inventory_non_negative_int_arg(0),
+                ),
+            ),
+            array(
+                'methods' => 'POST',
+                'permission_callback' => array($this, 'perm_lots_manage'),
+                'callback' => array($this, 'route_lot_create'),
+                'args' => $this->empty_route_args(),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/lots/(?P<lot_id>\d+)', array(
+            array(
+                'methods' => 'PATCH',
+                'permission_callback' => array($this, 'perm_lots_manage'),
+                'callback' => array($this, 'route_lot_update'),
+                'args' => array('lot_id' => $this->inventory_positive_int_arg()),
+            ),
+            array(
+                'methods' => 'DELETE',
+                'permission_callback' => array($this, 'perm_lots_manage'),
+                'callback' => array($this, 'route_lot_delete'),
+                'args' => array('lot_id' => $this->inventory_positive_int_arg()),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/lots/(?P<lot_id>\d+)/levels', array(
+            array(
+                'methods' => 'POST',
+                'permission_callback' => array($this, 'perm_lots_manage'),
+                'callback' => array($this, 'route_lot_level_upsert'),
+                'args' => array('lot_id' => $this->inventory_positive_int_arg()),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/transfers', array(
+            array(
+                'methods' => 'GET',
+                'permission_callback' => array($this, 'perm_transfers_read'),
+                'callback' => array($this, 'route_transfers_list'),
+                'args' => array(
+                    'status' => array('required' => false, 'type' => 'string', 'sanitize_callback' => 'sanitize_key'),
+                    'limit' => $this->inventory_non_negative_int_arg(100),
+                    'offset' => $this->inventory_non_negative_int_arg(0),
+                ),
+            ),
+            array(
+                'methods' => 'POST',
+                'permission_callback' => array($this, 'perm_transfers_manage'),
+                'callback' => array($this, 'route_transfer_create'),
+                'args' => $this->empty_route_args(),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/transfers/(?P<transfer_id>\d+)', array(
+            array(
+                'methods' => 'GET',
+                'permission_callback' => array($this, 'perm_transfers_read'),
+                'callback' => array($this, 'route_transfer_get'),
+                'args' => array('transfer_id' => $this->inventory_positive_int_arg()),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/transfers/(?P<transfer_id>\d+)/lines', array(
+            array(
+                'methods' => 'POST',
+                'permission_callback' => array($this, 'perm_transfers_manage'),
+                'callback' => array($this, 'route_transfer_add_line'),
+                'args' => array('transfer_id' => $this->inventory_positive_int_arg()),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/transfers/(?P<transfer_id>\d+)/send', array(
+            array(
+                'methods' => 'POST',
+                'permission_callback' => array($this, 'perm_transfers_manage'),
+                'callback' => array($this, 'route_transfer_send'),
+                'args' => array('transfer_id' => $this->inventory_positive_int_arg()),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/transfers/(?P<transfer_id>\d+)/receive', array(
+            array(
+                'methods' => 'POST',
+                'permission_callback' => array($this, 'perm_transfers_manage'),
+                'callback' => array($this, 'route_transfer_receive'),
+                'args' => array('transfer_id' => $this->inventory_positive_int_arg()),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/transfers/(?P<transfer_id>\d+)/cancel', array(
+            array(
+                'methods' => 'POST',
+                'permission_callback' => array($this, 'perm_transfers_manage'),
+                'callback' => array($this, 'route_transfer_cancel'),
+                'args' => array('transfer_id' => $this->inventory_positive_int_arg()),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/transfers/(?P<transfer_id>\d+)/lines/(?P<line_id>\d+)', array(
+            'methods' => 'DELETE',
+            'permission_callback' => array($this, 'perm_transfers_manage'),
+            'callback' => array($this, 'route_transfer_remove_line'),
+            'args' => array(
+                'transfer_id' => $this->inventory_positive_int_arg(),
+                'line_id' => $this->inventory_positive_int_arg(),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/returns', array(
+            array(
+                'methods' => 'GET',
+                'permission_callback' => array($this, 'perm_returns_read'),
+                'callback' => array($this, 'route_returns_list'),
+                'args' => array(
+                    'status' => array('required' => false, 'type' => 'string', 'sanitize_callback' => 'sanitize_key'),
+                    'order_id' => $this->inventory_non_negative_int_arg(0),
+                    'limit' => $this->inventory_non_negative_int_arg(100),
+                    'offset' => $this->inventory_non_negative_int_arg(0),
+                ),
+            ),
+            array(
+                'methods' => 'POST',
+                'permission_callback' => array($this, 'perm_returns_manage'),
+                'callback' => array($this, 'route_return_create'),
+                'args' => $this->empty_route_args(),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/returns/(?P<return_id>\d+)', array(
+            array(
+                'methods' => 'GET',
+                'permission_callback' => array($this, 'perm_returns_read'),
+                'callback' => array($this, 'route_return_get'),
+                'args' => array('return_id' => $this->inventory_positive_int_arg()),
+            ),
+            array(
+                'methods' => 'DELETE',
+                'permission_callback' => array($this, 'perm_returns_manage'),
+                'callback' => array($this, 'route_return_delete'),
+                'args' => array('return_id' => $this->inventory_positive_int_arg()),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/returns/(?P<return_id>\d+)/lines', array(
+            array(
+                'methods' => 'POST',
+                'permission_callback' => array($this, 'perm_returns_manage'),
+                'callback' => array($this, 'route_return_add_line'),
+                'args' => array('return_id' => $this->inventory_positive_int_arg()),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/returns/(?P<return_id>\d+)/lines/(?P<line_id>\d+)', array(
+            array(
+                'methods' => 'DELETE',
+                'permission_callback' => array($this, 'perm_returns_manage'),
+                'callback' => array($this, 'route_return_remove_line'),
+                'args' => array(
+                    'return_id' => $this->inventory_positive_int_arg(),
+                    'line_id' => $this->inventory_positive_int_arg(),
+                ),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/returns/(?P<return_id>\d+)/approve', array(
+            array(
+                'methods' => 'POST',
+                'permission_callback' => array($this, 'perm_returns_manage'),
+                'callback' => array($this, 'route_return_approve'),
+                'args' => array('return_id' => $this->inventory_positive_int_arg()),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/returns/(?P<return_id>\d+)/receive', array(
+            array(
+                'methods' => 'POST',
+                'permission_callback' => array($this, 'perm_returns_manage'),
+                'callback' => array($this, 'route_return_receive'),
+                'args' => array('return_id' => $this->inventory_positive_int_arg()),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/returns/(?P<return_id>\d+)/reject', array(
+            array(
+                'methods' => 'POST',
+                'permission_callback' => array($this, 'perm_returns_manage'),
+                'callback' => array($this, 'route_return_reject'),
+                'args' => array('return_id' => $this->inventory_positive_int_arg()),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/returns/(?P<return_id>\d+)/close', array(
+            array(
+                'methods' => 'POST',
+                'permission_callback' => array($this, 'perm_returns_manage'),
+                'callback' => array($this, 'route_return_close'),
+                'args' => array('return_id' => $this->inventory_positive_int_arg()),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/price-lists', array(
+            array(
+                'methods' => 'GET',
+                'permission_callback' => array($this, 'perm_price_lists_read'),
+                'callback' => array($this, 'route_price_lists_list'),
+                'args' => array(
+                    'customer_id' => $this->inventory_non_negative_int_arg(0),
+                    'supplier_id' => $this->inventory_non_negative_int_arg(0),
+                    'active' => array('required' => false, 'type' => 'boolean', 'sanitize_callback' => array($this, 'sanitize_pos_boolean'), 'validate_callback' => array($this, 'validate_pos_boolean')),
+                    'limit' => $this->inventory_non_negative_int_arg(100),
+                    'offset' => $this->inventory_non_negative_int_arg(0),
+                ),
+            ),
+            array(
+                'methods' => 'POST',
+                'permission_callback' => array($this, 'perm_price_lists_manage'),
+                'callback' => array($this, 'route_price_list_create'),
+                'args' => $this->empty_route_args(),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/price-lists/(?P<list_id>\d+)', array(
+            array(
+                'methods' => 'GET',
+                'permission_callback' => array($this, 'perm_price_lists_read'),
+                'callback' => array($this, 'route_price_list_get'),
+                'args' => array('list_id' => $this->inventory_positive_int_arg()),
+            ),
+            array(
+                'methods' => 'PATCH',
+                'permission_callback' => array($this, 'perm_price_lists_manage'),
+                'callback' => array($this, 'route_price_list_update'),
+                'args' => array('list_id' => $this->inventory_positive_int_arg()),
+            ),
+            array(
+                'methods' => 'DELETE',
+                'permission_callback' => array($this, 'perm_price_lists_manage'),
+                'callback' => array($this, 'route_price_list_delete'),
+                'args' => array('list_id' => $this->inventory_positive_int_arg()),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/price-lists/(?P<list_id>\d+)/items', array(
+            array(
+                'methods' => 'POST',
+                'permission_callback' => array($this, 'perm_price_lists_manage'),
+                'callback' => array($this, 'route_price_list_item_upsert'),
+                'args' => array('list_id' => $this->inventory_positive_int_arg()),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/price-lists/(?P<list_id>\d+)/items/(?P<item_id>\d+)', array(
+            'methods' => 'DELETE',
+            'permission_callback' => array($this, 'perm_price_lists_manage'),
+            'callback' => array($this, 'route_price_list_item_delete'),
+            'args' => array(
+                'list_id' => $this->inventory_positive_int_arg(),
+                'item_id' => $this->inventory_positive_int_arg(),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/approval-rules', array(
+            array(
+                'methods' => 'GET',
+                'permission_callback' => array($this, 'perm_approval_rules_read'),
+                'callback' => array($this, 'route_approval_rules_list'),
+                'args' => array(
+                    'document_type' => array('required' => false, 'type' => 'string', 'sanitize_callback' => 'sanitize_key'),
+                    'active' => array('required' => false, 'type' => 'boolean', 'sanitize_callback' => array($this, 'sanitize_pos_boolean'), 'validate_callback' => array($this, 'validate_pos_boolean')),
+                    'limit' => $this->inventory_non_negative_int_arg(100),
+                    'offset' => $this->inventory_non_negative_int_arg(0),
+                ),
+            ),
+            array(
+                'methods' => 'POST',
+                'permission_callback' => array($this, 'perm_approval_rules_manage'),
+                'callback' => array($this, 'route_approval_rule_create'),
+                'args' => $this->empty_route_args(),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/approval-rules/check', array(
+            array(
+                'methods' => 'POST',
+                'permission_callback' => array($this, 'perm_approval_rules_read'),
+                'callback' => array($this, 'route_approval_rule_check'),
+                'args' => $this->empty_route_args(),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/approval-rules/(?P<rule_id>\d+)', array(
+            array(
+                'methods' => 'PATCH',
+                'permission_callback' => array($this, 'perm_approval_rules_manage'),
+                'callback' => array($this, 'route_approval_rule_update'),
+                'args' => array('rule_id' => $this->inventory_positive_int_arg()),
+            ),
+            array(
+                'methods' => 'DELETE',
+                'permission_callback' => array($this, 'perm_approval_rules_manage'),
+                'callback' => array($this, 'route_approval_rule_delete'),
+                'args' => array('rule_id' => $this->inventory_positive_int_arg()),
             ),
         ));
 
@@ -279,6 +693,20 @@ class MGWS_REST_API {
             'permission_callback' => array($this, 'perm_pos_checkout'),
             'callback' => array($this, 'route_pos_checkout'),
             'args' => $this->pos_checkout_args(),
+        ));
+
+        register_rest_route('mgws/v1', '/pos/voids', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_pos_checkout'),
+            'callback' => array($this, 'route_pos_voids'),
+            'args' => array(
+                'reason' => $this->inventory_text_arg(),
+                'receipt_key' => $this->inventory_text_arg(),
+                'shift_id' => $this->inventory_text_arg(),
+                'register_name' => $this->inventory_text_arg(),
+                'site_id' => $this->inventory_non_negative_int_arg(0),
+                'lines' => array('required' => true, 'type' => 'array'),
+            ),
         ));
 
         register_rest_route('mgws/v1', '/pos/shifts', array(
@@ -468,6 +896,74 @@ class MGWS_REST_API {
             ),
         ));
 
+        // Riconciliazione completa su richiesta. Non prende parametri: il
+        // perimetro e' "tutto quello che WooCommerce o il ledger conoscono", e
+        // un filtro qui sarebbe un modo per credere di aver riconciliato tutto
+        // avendone saltata una parte. La sede non si dichiara perche' non si
+        // sceglie: ogni differenza va nella sede che il prodotto dichiara, e se
+        // non la dichiara resta ferma e viene riportata.
+        register_rest_route('mgws/v1', '/inventory/stock/reconcile-all', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_stock_move'),
+            'callback' => array($this, 'route_inventory_stock_reconcile_all'),
+            'args' => array(),
+        ));
+
+        register_rest_route('mgws/v1', '/inventory/stock/divergences', array(
+            'methods' => 'GET',
+            'permission_callback' => array($this, 'perm_stock_read'),
+            'callback' => array($this, 'route_inventory_stock_divergences'),
+            'args' => array(
+                'limit' => $this->inventory_non_negative_int_arg(100),
+                'offset' => $this->inventory_non_negative_int_arg(0),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/inventory/costs/product/(?P<product_id>\d+)', array(
+            'methods' => 'GET',
+            'permission_callback' => array($this, 'perm_costs_read'),
+            'callback' => array($this, 'route_inventory_cost_product'),
+            'args' => array(
+                'product_id' => $this->inventory_positive_int_arg(),
+                'variation_id' => $this->inventory_non_negative_int_arg(0),
+                'limit' => $this->inventory_non_negative_int_arg(50),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/inventory/costs', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_costs_manage'),
+            'callback' => array($this, 'route_inventory_cost_declare'),
+            'args' => array(
+                'product_id' => $this->inventory_positive_int_arg(),
+                'variation_id' => $this->inventory_non_negative_int_arg(0),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/inventory/costs/backfill', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_costs_manage'),
+            'callback' => array($this, 'route_inventory_cost_backfill'),
+            'args' => array(),
+        ));
+
+        register_rest_route('mgws/v1', '/inventory/costs/report', array(
+            'methods' => 'GET',
+            'permission_callback' => array($this, 'perm_costs_read'),
+            'callback' => array($this, 'route_inventory_cost_report'),
+            'args' => array(),
+        ));
+
+        register_rest_route('mgws/v1', '/inventory/costs/missing', array(
+            'methods' => 'GET',
+            'permission_callback' => array($this, 'perm_costs_read'),
+            'callback' => array($this, 'route_inventory_cost_missing'),
+            'args' => array(
+                'limit' => $this->inventory_non_negative_int_arg(100),
+                'offset' => $this->inventory_non_negative_int_arg(0),
+            ),
+        ));
+
         register_rest_route('mgws/v1', '/inventory/stock/move', array(
             'methods' => 'POST',
             'permission_callback' => array($this, 'perm_stock_move'),
@@ -493,6 +989,227 @@ class MGWS_REST_API {
                 'to_rack' => $this->inventory_short_text_arg(),
                 'to_shelf' => $this->inventory_short_text_arg(),
             ),
+        ));
+
+        register_rest_route('mgws/v1', '/inventory/stock/reset', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_stock_reset'),
+            'callback' => array($this, 'route_inventory_stock_reset'),
+            'args' => array(
+                'warehouse_id' => $this->inventory_positive_int_arg(),
+                // Required on purpose: a missing target must not mean "zero".
+                'target_qty' => $this->inventory_non_negative_int_arg(),
+                'product_ids' => array(
+                    'type' => 'array',
+                    'items' => array('type' => 'integer'),
+                    'default' => array(),
+                ),
+                'dry_run' => array('type' => 'boolean', 'default' => false),
+            ),
+        ));
+
+        register_rest_route('mgws/v1', '/inventory/shipments', array(
+            'methods' => 'GET',
+            'permission_callback' => array($this, 'perm_shipments'),
+            'callback' => array($this, 'route_shipments_list'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/shipments', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_shipments'),
+            'callback' => array($this, 'route_shipments_create'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/shipments/(?P<shipment_id>\\d+)', array(
+            'methods' => 'GET',
+            'permission_callback' => array($this, 'perm_shipments'),
+            'callback' => array($this, 'route_shipment_get'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/shipments/(?P<shipment_id>\\d+)/status', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_shipments'),
+            'callback' => array($this, 'route_shipment_status'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/shipments/(?P<shipment_id>\\d+)', array(
+            'methods' => 'DELETE',
+            'permission_callback' => array($this, 'perm_shipments'),
+            'callback' => array($this, 'route_shipment_delete'),
+        ));
+
+        register_rest_route('mgws/v1', '/inventory/reservations', array(
+            'methods' => 'GET',
+            'permission_callback' => array($this, 'perm_reservations'),
+            'callback' => array($this, 'route_reservations_list'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/reservations', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_reservations'),
+            'callback' => array($this, 'route_reservations_create'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/reservations/(?P<reservation_id>\\d+)/release', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_reservations'),
+            'callback' => array($this, 'route_reservation_release'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/reservations/(?P<reservation_id>\\d+)/consume', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_reservations'),
+            'callback' => array($this, 'route_reservation_consume'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/reservations/(?P<reservation_id>\\d+)', array(
+            'methods' => 'DELETE',
+            'permission_callback' => array($this, 'perm_reservations'),
+            'callback' => array($this, 'route_reservation_delete'),
+        ));
+
+        register_rest_route('mgws/v1', '/inventory/payments', array(
+            'methods' => 'GET',
+            'permission_callback' => array($this, 'perm_payments'),
+            'callback' => array($this, 'route_payments_list'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/payments', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_payments'),
+            'callback' => array($this, 'route_payments_create'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/payments/(?P<payment_id>\\d+)', array(
+            'methods' => 'DELETE',
+            'permission_callback' => array($this, 'perm_payments'),
+            'callback' => array($this, 'route_payment_delete'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/payments/aging', array(
+            'methods' => 'GET',
+            'permission_callback' => array($this, 'perm_payments'),
+            'callback' => array($this, 'route_payments_aging'),
+        ));
+
+        register_rest_route('mgws/v1', '/inventory/kits', array(
+            'methods' => 'GET',
+            'permission_callback' => array($this, 'perm_kits_deduction'),
+            'callback' => array($this, 'route_kits_list'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/kits', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_kits_deduction'),
+            'callback' => array($this, 'route_kits_create'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/kits/(?P<kit_id>\\d+)', array(
+            'methods' => 'GET',
+            'permission_callback' => array($this, 'perm_kits_deduction'),
+            'callback' => array($this, 'route_kit_get'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/kits/(?P<kit_id>\\d+)/components', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_kits_deduction'),
+            'callback' => array($this, 'route_kit_component_add'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/kits/components/(?P<component_id>\\d+)', array(
+            'methods' => 'DELETE',
+            'permission_callback' => array($this, 'perm_kits_deduction'),
+            'callback' => array($this, 'route_kit_component_delete'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/kits/(?P<kit_id>\\d+)', array(
+            'methods' => 'DELETE',
+            'permission_callback' => array($this, 'perm_kits_deduction'),
+            'callback' => array($this, 'route_kit_delete'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/kits/availability', array(
+            'methods' => 'GET',
+            'permission_callback' => array($this, 'perm_kits_deduction'),
+            'callback' => array($this, 'route_kit_availability'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/kits/deduct', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_kits_deduction'),
+            'callback' => array($this, 'route_kit_deduct'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/kits/restore', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_kits_deduction'),
+            'callback' => array($this, 'route_kit_restore'),
+        ));
+
+        register_rest_route('mgws/v1', '/inventory/documents', array(
+            'methods' => 'GET',
+            'permission_callback' => array($this, 'perm_documents'),
+            'callback' => array($this, 'route_documents_list'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/documents', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_documents'),
+            'callback' => array($this, 'route_documents_create'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/documents/(?P<document_id>\\d+)', array(
+            'methods' => 'GET',
+            'permission_callback' => array($this, 'perm_documents'),
+            'callback' => array($this, 'route_document_get'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/documents/(?P<document_id>\\d+)/status', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_documents'),
+            'callback' => array($this, 'route_document_status'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/documents/(?P<document_id>\\d+)', array(
+            'methods' => 'DELETE',
+            'permission_callback' => array($this, 'perm_documents'),
+            'callback' => array($this, 'route_document_delete'),
+        ));
+
+        register_rest_route('mgws/v1', '/inventory/product-barcodes', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_product_barcodes'),
+            'callback' => array($this, 'route_product_barcode_upsert'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/product-barcodes/(?P<product_id>\\d+)', array(
+            'methods' => 'GET',
+            'permission_callback' => array($this, 'perm_product_barcodes'),
+            'callback' => array($this, 'route_product_barcode_get'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/product-barcodes/(?P<product_id>\\d+)', array(
+            'methods' => 'DELETE',
+            'permission_callback' => array($this, 'perm_product_barcodes'),
+            'callback' => array($this, 'route_product_barcode_delete'),
+        ));
+
+        register_rest_route('mgws/v1', '/inventory/purchase-orders/(?P<purchase_order_id>\\d+)/send', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_stock_move'),
+            'callback' => array($this, 'route_purchase_order_send'),
+        ));
+
+        register_rest_route('mgws/v1', '/inventory/supplier-prices', array(
+            'methods' => 'GET',
+            'permission_callback' => array($this, 'perm_supplier_prices'),
+            'callback' => array($this, 'route_supplier_prices_list'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/supplier-prices', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_supplier_prices'),
+            'callback' => array($this, 'route_supplier_prices_create'),
+        ));
+
+        register_rest_route('mgws/v1', '/inventory/count-schedules', array(
+            'methods' => 'GET',
+            'permission_callback' => array($this, 'perm_count_schedules'),
+            'callback' => array($this, 'route_count_schedules_list'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/count-schedules', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_count_schedules'),
+            'callback' => array($this, 'route_count_schedules_create'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/count-schedules/(?P<schedule_id>\\d+)', array(
+            'methods' => 'PATCH',
+            'permission_callback' => array($this, 'perm_count_schedules'),
+            'callback' => array($this, 'route_count_schedule_update'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/count-schedules/(?P<schedule_id>\\d+)', array(
+            'methods' => 'DELETE',
+            'permission_callback' => array($this, 'perm_count_schedules'),
+            'callback' => array($this, 'route_count_schedule_delete'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/count-schedules/run-due', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_count_schedules'),
+            'callback' => array($this, 'route_count_schedules_run_due'),
         ));
 
         register_rest_route('mgws/v1', '/inventory/rfid/scan', array(
@@ -732,6 +1449,9 @@ class MGWS_REST_API {
             $args['meta_query'] = array(array('key' => 'mg_site_id', 'value' => $site_id, 'compare' => '='));
         }
         $ids = get_posts($args);
+        // The "Unassigned" warehouse exists for the reconciliation, not for a
+        // human to pick: it is left out of the picker like everywhere else.
+        $ids = MGWS_Stock_Reconciler::filter_system_warehouses(is_array($ids) ? $ids : array());
         return rest_ensure_response(array_map(function ($warehouse_id) {
             $warehouse_id = (int) $warehouse_id;
             return array(
@@ -1019,8 +1739,9 @@ class MGWS_REST_API {
         $reason = $this->inventory_restock_text($body['reason'] ?? null, 'reason', 4000, true, true);
         $note = $this->inventory_restock_text($body['note'] ?? '', 'note', 4000, false, true);
         $barcode = $this->inventory_restock_text($body['barcode'] ?? '', 'barcode', 191);
-        if (is_wp_error($idempotency_key) || is_wp_error($product_id) || is_wp_error($variation_id) || is_wp_error($quantity_delta) || is_wp_error($reason) || is_wp_error($note) || is_wp_error($barcode)) {
-            return is_wp_error($idempotency_key) ? $idempotency_key : (is_wp_error($product_id) ? $product_id : (is_wp_error($variation_id) ? $variation_id : (is_wp_error($quantity_delta) ? $quantity_delta : (is_wp_error($reason) ? $reason : (is_wp_error($note) ? $note : $barcode)))));
+        $unit_cost_cents = $this->inventory_optional_money($body['unit_cost'] ?? null, 'unit_cost');
+        if (is_wp_error($idempotency_key) || is_wp_error($product_id) || is_wp_error($variation_id) || is_wp_error($quantity_delta) || is_wp_error($reason) || is_wp_error($note) || is_wp_error($barcode) || is_wp_error($unit_cost_cents)) {
+            return is_wp_error($idempotency_key) ? $idempotency_key : (is_wp_error($product_id) ? $product_id : (is_wp_error($variation_id) ? $variation_id : (is_wp_error($quantity_delta) ? $quantity_delta : (is_wp_error($reason) ? $reason : (is_wp_error($note) ? $note : (is_wp_error($barcode) ? $barcode : $unit_cost_cents))))));
         }
         $product = $this->inventory_product($product_id, $variation_id);
         if (is_wp_error($product)) {
@@ -1050,7 +1771,7 @@ class MGWS_REST_API {
 
         $wpdb->query('START TRANSACTION');
         $previous_stock = MGWS_DB::sum_qty_for_item($product_id, $variation_id);
-        $applied = MGWS_DB::apply_delta_level((int) $location['warehouse_id'], $product_id, $variation_id, $quantity_delta, (string) $location['room'], (string) $location['rack'], (string) $location['shelf']);
+        $applied = MGWS_DB::apply_delta_level((int) $location['warehouse_id'], $product_id, $variation_id, $quantity_delta, (string) $location['room'], (string) $location['rack'], (string) $location['shelf'], $unit_cost_cents);
         if (empty($applied['ok'])) {
             $wpdb->query('ROLLBACK');
             return $fail(new WP_Error('mgws_conflict', 'Unable to apply quick load', array('status' => 409)));
@@ -1073,13 +1794,19 @@ class MGWS_REST_API {
         $operation_id = $operation_key === ''
             ? 0
             : MGWS_DB::ensure_movement($operation_key, 'quick_load', get_current_user_id(), (int) $location['site_id'], 'quick_load', $note !== '' ? $note : null);
-        $row_id = MGWS_DB::insert_quick_load_move((int) $location['site_id'], (int) $location['warehouse_id'], $product_id, $variation_id, $quantity_delta, (string) $location['room'], (string) $location['rack'], (string) $location['shelf'], get_current_user_id(), $audit_note, $operation_id, (int) $previous_stock, (int) $current_stock);
+        // A load without an explicit cost still moved value: the average it was
+        // valued at is the cost of those pieces, and that is what the row records.
+        $move_unit_cost_cents = $unit_cost_cents;
+        if ($move_unit_cost_cents === null && !empty($applied['value_delta_cents'])) {
+            $move_unit_cost_cents = MGWS_Cost_Plan::average_cents((int) $applied['value_delta_cents'], $quantity_delta);
+        }
+        $row_id = MGWS_DB::insert_quick_load_move((int) $location['site_id'], (int) $location['warehouse_id'], $product_id, $variation_id, $quantity_delta, (string) $location['room'], (string) $location['rack'], (string) $location['shelf'], get_current_user_id(), $audit_note, $operation_id, (int) $previous_stock, (int) $current_stock, $move_unit_cost_cents, $applied['value_delta_cents'] ?? null);
         if ($row_id <= 0) {
             $wpdb->query('ROLLBACK');
             return $fail(new WP_Error('mgws_error', 'Unable to record quick load movement', array('status' => 500)));
         }
         $wpdb->query('COMMIT');
-        $this->sync_woo_stock($product_id, $variation_id);
+        MGWS_Woo_Stock::commit_delta($product_id, $variation_id, $quantity_delta);
 
         $response = array(
             'ok' => true,
@@ -1092,6 +1819,8 @@ class MGWS_REST_API {
             'reason' => $reason,
             'movement_id' => (int) $operation_id,
             'ledger_movement_id' => $row_id,
+            'unit_cost_cents' => $move_unit_cost_cents,
+            'value_delta_cents' => $applied['value_delta_cents'] ?? null,
             'location' => $location,
         );
         if (!MGWS_DB::mark_pos_idempotency_succeeded($idempotency_key, $payload_hash, $row_id, 200, $response)) {
@@ -2280,14 +3009,23 @@ class MGWS_REST_API {
                 $location = $this->inventory_receipt_location($receipt, $line);
                 if (is_wp_error($location)) { $wpdb->query('ROLLBACK'); return $location; }
                 $before = MGWS_DB::sum_qty_for_item((int) $line['product_id'], (int) $line['variation_id']);
-                $applied = MGWS_DB::apply_delta_level((int) $location['warehouse_id'], (int) $line['product_id'], (int) $line['variation_id'], (int) $line['received_qty'], (string) $location['room'], (string) $location['rack'], (string) $location['shelf']);
+                // A zero cost on a receipt line is an unfilled field, not a free
+                // item: the column is NOT NULL DEFAULT 0. Passing null keeps the
+                // current average instead of valuing the load at zero.
+                $line_cost_cents = MGWS_Cost::to_cents($line['unit_cost'] ?? null);
+                if ($line_cost_cents !== null && $line_cost_cents <= 0) {
+                    $line_cost_cents = null;
+                }
+                $applied = MGWS_DB::apply_delta_level((int) $location['warehouse_id'], (int) $line['product_id'], (int) $line['variation_id'], (int) $line['received_qty'], (string) $location['room'], (string) $location['rack'], (string) $location['shelf'], $line_cost_cents);
                 if (empty($applied['ok'])) { $wpdb->query('ROLLBACK'); return new WP_Error('mgws_conflict', 'Unable to apply receipt stock', array('status' => 409)); }
                 $after = MGWS_DB::sum_qty_for_item((int) $line['product_id'], (int) $line['variation_id']);
                 $note = 'Receipt ' . (string) $receipt['document_number'] . '; stock ' . $before . ' -> ' . $after . ' (accepted ' . (int) $line['received_qty'] . ')';
-                $move_id = MGWS_DB::insert_receipt_move((int) $receipt['site_id'], (int) $location['warehouse_id'], (int) $line['product_id'], (int) $line['variation_id'], (int) $line['received_qty'], (string) $location['room'], (string) $location['rack'], (string) $location['shelf'], get_current_user_id(), (int) $receipt['id'], (int) $line['id'], (string) $line['reason_code'], $note);
+                $move_id = MGWS_DB::insert_receipt_move((int) $receipt['site_id'], (int) $location['warehouse_id'], (int) $line['product_id'], (int) $line['variation_id'], (int) $line['received_qty'], (string) $location['room'], (string) $location['rack'], (string) $location['shelf'], get_current_user_id(), (int) $receipt['id'], (int) $line['id'], (string) $line['reason_code'], $note, $line_cost_cents, $applied['value_delta_cents'] ?? null);
                 if ($move_id <= 0) { $wpdb->query('ROLLBACK'); return new WP_Error('mgws_error', 'Unable to record receipt movement', array('status' => 500)); }
                 update_post_meta((int) $line['variation_id'] > 0 ? (int) $line['variation_id'] : (int) $line['product_id'], '_purchase_cost', (string) $line['unit_cost']);
-                $affected_items[(int) $line['product_id'] . ':' . (int) $line['variation_id']] = array((int) $line['product_id'], (int) $line['variation_id']);
+                $item_key = (int) $line['product_id'] . ':' . (int) $line['variation_id'];
+                $item_delta = isset($affected_items[$item_key]) ? (int) $affected_items[$item_key][2] : 0;
+                $affected_items[$item_key] = array((int) $line['product_id'], (int) $line['variation_id'], $item_delta + (int) $line['received_qty']);
             }
             if (!is_array(MGWS_DB::update_purchase_order_line((int) $purchase_order['id'], (int) $purchase_order_line['id'], array('received_qty' => (int) $purchase_order_line['received_qty'] + (int) $line['received_qty'])))) { $wpdb->query('ROLLBACK'); return new WP_Error('mgws_error', 'Unable to update purchase order receipt quantity', array('status' => 500)); }
             if ((int) $line['backorder_qty'] > 0 && !is_array(MGWS_DB::create_or_update_backorder((int) $line['id'], array('purchase_order_line_id' => (int) $line['purchase_order_line_id'], 'product_id' => (int) $line['product_id'], 'variation_id' => (int) $line['variation_id'], 'remaining_qty' => (int) $line['backorder_qty'], 'status' => 'open', 'expected_at_gmt' => $purchase_order_line['expected_at_gmt'] ?? null, 'resolved_at_gmt' => null)))) { $wpdb->query('ROLLBACK'); return new WP_Error('mgws_error', 'Unable to save receipt backorder', array('status' => 500)); }
@@ -2296,7 +3034,9 @@ class MGWS_REST_API {
         $posted = MGWS_DB::update_receipt((int) $receipt['id'], array('status' => 'posted', 'received_at_gmt' => $now, 'validated_at_gmt' => $now, 'posted_at_gmt' => $now, 'validated_by_user_id' => get_current_user_id(), 'posted_by_user_id' => get_current_user_id()));
         if (!is_array($posted)) { $wpdb->query('ROLLBACK'); return new WP_Error('mgws_conflict', 'Unable to post receipt', array('status' => 409)); }
         $wpdb->query('COMMIT');
-        foreach ($affected_items as $item) { $this->sync_woo_stock($item[0], $item[1]); }
+        foreach ($affected_items as $item) {
+            MGWS_Woo_Stock::commit_delta((int) $item[0], (int) $item[1], (int) $item[2]);
+        }
         return rest_ensure_response($this->inventory_receipt_response($posted));
     }
 
@@ -2583,12 +3323,20 @@ class MGWS_REST_API {
                 $wpdb->query('ROLLBACK');
                 return new WP_Error('mgws_conflict', 'Unable to apply inventory count adjustment', array('status' => 409));
             }
-            $move_id = MGWS_DB::insert_inventory_count_move((int) $session['site_id'], (int) $line['warehouse_id'], (int) $line['product_id'], (int) $line['variation_id'], $discrepancy, (string) $line['room'], (string) $line['rack'], (string) $line['shelf'], get_current_user_id(), (int) $session['id'], (int) $line['id'], (string) $line['reason_code'], 'Inventory count adjustment');
+            // A count carries no cost of its own: the adjustment moves at the
+            // current average, and that average is what the row records.
+            $count_value_delta = $applied['value_delta_cents'] ?? null;
+            $count_unit_cost = $count_value_delta === null
+                ? null
+                : MGWS_Cost_Plan::average_cents(abs((int) $count_value_delta), abs($discrepancy));
+            $move_id = MGWS_DB::insert_inventory_count_move((int) $session['site_id'], (int) $line['warehouse_id'], (int) $line['product_id'], (int) $line['variation_id'], $discrepancy, (string) $line['room'], (string) $line['rack'], (string) $line['shelf'], get_current_user_id(), (int) $session['id'], (int) $line['id'], (string) $line['reason_code'], 'Inventory count adjustment', $count_unit_cost, $count_value_delta);
             if ($move_id <= 0 || !is_array(MGWS_DB::update_inventory_count_line((int) $session['id'], (int) $line['id'], array('stock_move_id' => $move_id, 'discrepancy_qty' => $discrepancy)))) {
                 $wpdb->query('ROLLBACK');
                 return new WP_Error('mgws_error', 'Unable to record inventory count movement', array('status' => 500));
             }
-            $affected_items[(int) $line['product_id'] . ':' . (int) $line['variation_id']] = array((int) $line['product_id'], (int) $line['variation_id']);
+            $count_item_key = (int) $line['product_id'] . ':' . (int) $line['variation_id'];
+            $count_item_delta = isset($affected_items[$count_item_key]) ? (int) $affected_items[$count_item_key][2] : 0;
+            $affected_items[$count_item_key] = array((int) $line['product_id'], (int) $line['variation_id'], $count_item_delta + $discrepancy);
         }
         $now = gmdate('Y-m-d H:i:s');
         $posted = MGWS_DB::update_inventory_count_session((int) $session['id'], array('status' => 'posted', 'approved_by_user_id' => get_current_user_id(), 'approved_at_gmt' => $now, 'posted_at_gmt' => $now));
@@ -2598,7 +3346,7 @@ class MGWS_REST_API {
         }
         $wpdb->query('COMMIT');
         foreach ($affected_items as $item) {
-            $this->sync_woo_stock($item[0], $item[1]);
+            MGWS_Woo_Stock::commit_delta((int) $item[0], (int) $item[1], (int) $item[2]);
         }
         return rest_ensure_response($this->inventory_count_session_response($posted, true));
     }
@@ -2675,6 +3423,43 @@ class MGWS_REST_API {
         return true;
     }
 
+    /**
+     * Permission for the back-office modules added in S14.
+     *
+     * Reading (GET) is a stock read. Writing needs the module's own capability
+     * (or manage_options) and, like perm_stock_move(), an assigned site: these
+     * routes write stock (kits, reset) or fiscal records (documents, payments),
+     * so a read-only role must never pass.
+     */
+    public function perm_dedicated($cap, $request = null) {
+        $method = $request instanceof WP_REST_Request ? strtoupper((string) $request->get_method()) : 'POST';
+        if ($method === 'GET' || $method === 'HEAD') {
+            return $this->perm_stock_read();
+        }
+        $ok = $this->require_logged_in();
+        if (is_wp_error($ok)) {
+            return $ok;
+        }
+        if (!current_user_can($cap) && !current_user_can('manage_options')) {
+            return new WP_Error('mgws_forbidden', 'Insufficient permissions', array('status' => 403));
+        }
+        if (!$this->can_manage_sites() && $this->effective_site_for_user(get_current_user_id()) <= 0) {
+            return new WP_Error('mgws_site_required', 'No site assigned to this user: ask an employee manager to assign one', array('status' => 403));
+        }
+        return true;
+    }
+
+    public function perm_stock_reset($request = null) { return $this->perm_dedicated('mgws_stock_reset_manage', $request); }
+    public function perm_supplier_prices($request = null) { return $this->perm_dedicated('mgws_supplier_prices_manage', $request); }
+    public function perm_count_schedules($request = null) { return $this->perm_dedicated('mgws_count_schedules_manage', $request); }
+    public function perm_shipments($request = null) { return $this->perm_dedicated('mgws_shipments_manage', $request); }
+    public function perm_reservations($request = null) { return $this->perm_dedicated('mgws_reservations_manage', $request); }
+    public function perm_payments($request = null) { return $this->perm_dedicated('mgws_payments_manage', $request); }
+    public function perm_documents($request = null) { return $this->perm_dedicated('mgws_documents_manage', $request); }
+    public function perm_product_barcodes($request = null) { return $this->perm_dedicated('mgws_product_barcodes_manage', $request); }
+    public function perm_kits_deduction($request = null) { return $this->perm_dedicated('mgws_kits_manage', $request); }
+
+
     public function perm_inventory_restock_read() {
         return $this->perm_stock_read();
     }
@@ -2727,6 +3512,142 @@ class MGWS_REST_API {
         return true;
     }
 
+    /**
+     * Leggere i set e' leggere il modello di permessi del negozio: chi puo'
+     * gestirli puo' anche vederli, anche senza mgws_roles_read.
+     */
+    public function perm_roles_read() {
+        $ok = $this->require_logged_in();
+        if (is_wp_error($ok)) {
+            return $ok;
+        }
+        if (!current_user_can('mgws_roles_read') && !current_user_can('mgws_roles_manage') && !current_user_can('manage_options')) {
+            return new WP_Error('mgws_forbidden', 'Insufficient permissions', array('status' => 403));
+        }
+        return true;
+    }
+
+    public function perm_roles_manage() {
+        $ok = $this->require_logged_in();
+        if (is_wp_error($ok)) {
+            return $ok;
+        }
+        if (!current_user_can('mgws_roles_manage') && !current_user_can('manage_options')) {
+            return new WP_Error('mgws_forbidden', 'Insufficient permissions', array('status' => 403));
+        }
+        return true;
+    }
+
+    public function perm_lots_read() {
+        $ok = $this->require_logged_in();
+        if (is_wp_error($ok)) {
+            return $ok;
+        }
+        if (!current_user_can('mgws_stock_read') && !current_user_can('manage_woocommerce') && !current_user_can('manage_options')) {
+            return new WP_Error('mgws_forbidden', 'Insufficient permissions', array('status' => 403));
+        }
+        return true;
+    }
+
+    public function perm_lots_manage() {
+        $ok = $this->require_logged_in();
+        if (is_wp_error($ok)) {
+            return $ok;
+        }
+        if (!current_user_can('mgws_lots_manage') && !current_user_can('manage_options')) {
+            return new WP_Error('mgws_forbidden', 'Insufficient permissions', array('status' => 403));
+        }
+        return true;
+    }
+
+    public function perm_transfers_read() {
+        $ok = $this->require_logged_in();
+        if (is_wp_error($ok)) {
+            return $ok;
+        }
+        if (!current_user_can('mgws_stock_read') && !current_user_can('manage_woocommerce') && !current_user_can('manage_options')) {
+            return new WP_Error('mgws_forbidden', 'Insufficient permissions', array('status' => 403));
+        }
+        return true;
+    }
+
+    public function perm_transfers_manage() {
+        $ok = $this->require_logged_in();
+        if (is_wp_error($ok)) {
+            return $ok;
+        }
+        if (!current_user_can('mgws_transfers_manage') && !current_user_can('manage_options')) {
+            return new WP_Error('mgws_forbidden', 'Insufficient permissions', array('status' => 403));
+        }
+        return true;
+    }
+
+    public function perm_returns_read() {
+        $ok = $this->require_logged_in();
+        if (is_wp_error($ok)) {
+            return $ok;
+        }
+        if (!current_user_can('mgws_stock_read') && !current_user_can('manage_woocommerce') && !current_user_can('manage_options')) {
+            return new WP_Error('mgws_forbidden', 'Insufficient permissions', array('status' => 403));
+        }
+        return true;
+    }
+
+    public function perm_returns_manage() {
+        $ok = $this->require_logged_in();
+        if (is_wp_error($ok)) {
+            return $ok;
+        }
+        if (!current_user_can('mgws_returns_manage') && !current_user_can('manage_options')) {
+            return new WP_Error('mgws_forbidden', 'Insufficient permissions', array('status' => 403));
+        }
+        return true;
+    }
+
+    public function perm_price_lists_read() {
+        $ok = $this->require_logged_in();
+        if (is_wp_error($ok)) {
+            return $ok;
+        }
+        if (!current_user_can('mgws_stock_read') && !current_user_can('manage_woocommerce') && !current_user_can('manage_options')) {
+            return new WP_Error('mgws_forbidden', 'Insufficient permissions', array('status' => 403));
+        }
+        return true;
+    }
+
+    public function perm_price_lists_manage() {
+        $ok = $this->require_logged_in();
+        if (is_wp_error($ok)) {
+            return $ok;
+        }
+        if (!current_user_can('mgws_price_lists_manage') && !current_user_can('manage_options')) {
+            return new WP_Error('mgws_forbidden', 'Insufficient permissions', array('status' => 403));
+        }
+        return true;
+    }
+
+    public function perm_approval_rules_read() {
+        $ok = $this->require_logged_in();
+        if (is_wp_error($ok)) {
+            return $ok;
+        }
+        if (!current_user_can('mgws_stock_read') && !current_user_can('manage_woocommerce') && !current_user_can('manage_options')) {
+            return new WP_Error('mgws_forbidden', 'Insufficient permissions', array('status' => 403));
+        }
+        return true;
+    }
+
+    public function perm_approval_rules_manage() {
+        $ok = $this->require_logged_in();
+        if (is_wp_error($ok)) {
+            return $ok;
+        }
+        if (!current_user_can('mgws_approval_rules_manage') && !current_user_can('manage_options')) {
+            return new WP_Error('mgws_forbidden', 'Insufficient permissions', array('status' => 403));
+        }
+        return true;
+    }
+
     public function perm_pos_checkout() {
         $ok = $this->require_logged_in();
         if (is_wp_error($ok)) {
@@ -2755,6 +3676,32 @@ class MGWS_REST_API {
             return $ok;
         }
         if (!current_user_can('mgws_reports_read') && !current_user_can('manage_woocommerce') && !current_user_can('manage_options')) {
+            return new WP_Error('mgws_forbidden', 'Insufficient permissions', array('status' => 403));
+        }
+        return true;
+    }
+
+    /**
+     * Reading costs is reading the shop's margin: the fallback is an
+     * administrator-level capability, not the stock capability.
+     */
+    public function perm_costs_read() {
+        $ok = $this->require_logged_in();
+        if (is_wp_error($ok)) {
+            return $ok;
+        }
+        if (!current_user_can('mgws_costs_read') && !current_user_can('manage_woocommerce') && !current_user_can('manage_options')) {
+            return new WP_Error('mgws_forbidden', 'Insufficient permissions', array('status' => 403));
+        }
+        return true;
+    }
+
+    public function perm_costs_manage() {
+        $ok = $this->require_logged_in();
+        if (is_wp_error($ok)) {
+            return $ok;
+        }
+        if (!current_user_can('mgws_costs_manage') && !current_user_can('manage_options')) {
             return new WP_Error('mgws_forbidden', 'Insufficient permissions', array('status' => 403));
         }
         return true;
@@ -3078,6 +4025,37 @@ class MGWS_REST_API {
         return (int) $value;
     }
 
+    /**
+     * An optional money amount, converted to minor units.
+     *
+     * Absent, empty and null mean "not provided" and stay null: the caller decides
+     * whether the current average cost should be used instead. A non-numeric or
+     * negative amount is a client error, not a silent zero, because a zero cost
+     * would be indistinguishable from a free item.
+     *
+     * @param mixed  $value
+     * @param string $field
+     * @return int|null|WP_Error
+     */
+    private function inventory_optional_money($value, $field) {
+        if ($value === null) {
+            return null;
+        }
+        if (is_string($value)) {
+            $value = trim($value);
+            if ($value === '') {
+                return null;
+            }
+        }
+        if (!is_numeric($value)) {
+            return new WP_Error('mgws_bad_request', $field . ' must be a non-negative amount', array('status' => 400));
+        }
+        if ((float) $value < 0) {
+            return new WP_Error('mgws_bad_request', $field . ' must be a non-negative amount', array('status' => 400));
+        }
+        return MGWS_Cost::to_cents($value);
+    }
+
     private function inventory_product($product_id, $variation_id) {
         if ($product_id <= 0 || $variation_id < 0) {
             return new WP_Error('mgws_bad_request', 'Invalid product identifier', array('status' => 400));
@@ -3123,13 +4101,20 @@ class MGWS_REST_API {
 
     private function inventory_records($levels, $products = array()) {
         $records = array();
+        // Names travel with the ids: the app's warehouse list leaves out the
+        // system "Unassigned" one, which otherwise showed as a bare number.
+        $warehouse_ids = array();
+        foreach ($levels as $level) {
+            $warehouse_ids[(int) ($level['warehouse_id'] ?? 0)] = true;
+        }
+        $warehouse_names = $this->load_post_titles(array_keys($warehouse_ids));
         foreach ($levels as $level) {
             $product_id = (int) ($level['product_id'] ?? 0);
             $variation_id = (int) ($level['variation_id'] ?? 0);
             $key = $product_id . ':' . $variation_id;
             if (!isset($records[$key])) { $records[$key] = $this->inventory_empty_record($product_id, $variation_id, $products[$key] ?? null); }
             $records[$key]['current_stock'] += (int) ($level['qty'] ?? 0);
-            $records[$key]['locations'][] = array('site_id' => (int) ($level['site_id'] ?? 0), 'warehouse_id' => (int) ($level['warehouse_id'] ?? 0), 'qty' => (int) ($level['qty'] ?? 0), 'room' => (string) ($level['room'] ?? ''), 'rack' => (string) ($level['rack'] ?? ''), 'shelf' => (string) ($level['shelf'] ?? ''), 'location_label' => MGWS_DB::format_location_label($level['room'] ?? '', $level['rack'] ?? '', $level['shelf'] ?? ''));
+            $records[$key]['locations'][] = array('site_id' => (int) ($level['site_id'] ?? 0), 'warehouse_id' => (int) ($level['warehouse_id'] ?? 0), 'warehouse_name' => (string) ($warehouse_names[(int) ($level['warehouse_id'] ?? 0)] ?? ''), 'qty' => (int) ($level['qty'] ?? 0), 'room' => (string) ($level['room'] ?? ''), 'rack' => (string) ($level['rack'] ?? ''), 'shelf' => (string) ($level['shelf'] ?? ''), 'location_label' => MGWS_DB::format_location_label($level['room'] ?? '', $level['rack'] ?? '', $level['shelf'] ?? ''));
         }
         return array_values($records);
     }
@@ -3152,20 +4137,29 @@ class MGWS_REST_API {
         return rest_ensure_response(array(
             'ok' => true,
             'turno_obbligatorio' => $this->pos_turno_obbligatorio(),
+            'uninstall_on_delete' => (bool) get_option('mgws_uninstall_on_delete', false),
         ));
     }
 
     public function route_pos_settings_put(WP_REST_Request $request) {
         $body = $this->inventory_body($request);
-        if (!array_key_exists('turno_obbligatorio', $body)) {
-            return new WP_Error('mgws_bad_request', 'turno_obbligatorio is required', array('status' => 400));
+        $updated = array('ok' => true);
+
+        if (array_key_exists('turno_obbligatorio', $body)) {
+            $turno_obbligatorio = filter_var($body['turno_obbligatorio'], FILTER_VALIDATE_BOOLEAN);
+            update_option(self::POS_TURNO_OBBLIGATORIO_OPTION, $turno_obbligatorio ? '1' : '0', false);
+            $updated['turno_obbligatorio'] = $turno_obbligatorio;
         }
-        $turno_obbligatorio = filter_var($body['turno_obbligatorio'], FILTER_VALIDATE_BOOLEAN);
-        update_option(self::POS_TURNO_OBBLIGATORIO_OPTION, $turno_obbligatorio ? '1' : '0', false);
-        return rest_ensure_response(array(
-            'ok' => true,
-            'turno_obbligatorio' => $turno_obbligatorio,
-        ));
+        if (array_key_exists('uninstall_on_delete', $body)) {
+            $uninstall_on_delete = filter_var($body['uninstall_on_delete'], FILTER_VALIDATE_BOOLEAN);
+            update_option('mgws_uninstall_on_delete', $uninstall_on_delete ? '1' : '0', false);
+            $updated['uninstall_on_delete'] = $uninstall_on_delete;
+        }
+
+        if (count($updated) === 1) {
+            return new WP_Error('mgws_bad_request', 'turno_obbligatorio or uninstall_on_delete is required', array('status' => 400));
+        }
+        return rest_ensure_response($updated);
     }
 
     public function route_me_settings_get(WP_REST_Request $request) {
@@ -3443,16 +4437,47 @@ class MGWS_REST_API {
         if (is_wp_error($data)) {
             return $data;
         }
-        $site_id = $this->employee_site_from_request($request, (int) ($data['wp_user_id'] ?? 0), false);
+        $account = $this->employee_account_from_request($request, $data, 0);
+        if (is_wp_error($account)) {
+            return $account;
+        }
+        // Every new employee is also a user of the site: a record nobody can
+        // sign in with cannot clock shifts or use the app.
+        if ($account === null && (int) ($data['wp_user_id'] ?? 0) <= 0) {
+            return new WP_Error('mgws_account_required', 'A new employee needs a WordPress user: send create_wp_user or wp_user_id', array('status' => 400));
+        }
+        if ($account === null) {
+            $conflict = $this->employee_link_conflict((int) ($data['wp_user_id'] ?? 0), 0);
+            if (is_wp_error($conflict)) {
+                return $conflict;
+            }
+        }
+        $site_id = $this->employee_site_from_request($request, (int) ($data['wp_user_id'] ?? 0), false, $account !== null);
         if (is_wp_error($site_id)) {
             return $site_id;
         }
+        $new_user_id = 0;
+        if ($account !== null) {
+            $new_user_id = $this->create_employee_user($account, $data);
+            if (is_wp_error($new_user_id)) {
+                return $new_user_id;
+            }
+            $data['wp_user_id'] = $new_user_id;
+        }
         $row = MGWS_DB::insert_employee($data);
         if (!is_array($row)) {
+            // The account exists only for this employee: without the record
+            // nobody could find it from the app, so it goes too.
+            if ($new_user_id > 0) {
+                $this->delete_employee_user($new_user_id);
+            }
             return new WP_Error('mgws_employee_error', 'Employee could not be created', array('status' => 500));
         }
         if ($site_id !== null) {
             update_user_meta((int) $data['wp_user_id'], 'mg_default_site_id', (int) $site_id);
+        }
+        if ($account !== null && $account['send_invite']) {
+            wp_new_user_notification($new_user_id, null, 'user');
         }
         return rest_ensure_response($this->employee_response($row));
     }
@@ -3467,19 +4492,325 @@ class MGWS_REST_API {
             return $data;
         }
         $existing = MGWS_DB::get_employee($employee_id);
+        $account = $this->employee_account_from_request($request, $data, (int) ($existing['wp_user_id'] ?? 0), $existing);
+        if (is_wp_error($account)) {
+            return $account;
+        }
         $wp_user_id = (int) ($data['wp_user_id'] ?? ($existing['wp_user_id'] ?? 0));
-        $site_id = $this->employee_site_from_request($request, $wp_user_id, true);
+        if ($account === null) {
+            $conflict = $this->employee_link_conflict($wp_user_id, $employee_id);
+            if (is_wp_error($conflict)) {
+                return $conflict;
+            }
+        }
+        $site_id = $this->employee_site_from_request($request, $wp_user_id, $account === null, $account !== null);
         if (is_wp_error($site_id)) {
             return $site_id;
         }
+        if ($account === null && $wp_user_id > 0) {
+            $check = $this->employee_user_sync_check($wp_user_id, $data);
+            if (is_wp_error($check)) {
+                return $check;
+            }
+        }
+        $new_user_id = 0;
+        if ($account !== null) {
+            $new_user_id = $this->create_employee_user($account, array_merge($existing, $data));
+            if (is_wp_error($new_user_id)) {
+                return $new_user_id;
+            }
+            $data['wp_user_id'] = $new_user_id;
+            $wp_user_id = $new_user_id;
+        }
         $row = MGWS_DB::update_employee($employee_id, $data);
         if (!is_array($row)) {
+            if ($new_user_id > 0) {
+                $this->delete_employee_user($new_user_id);
+            }
             return new WP_Error('mgws_employee_error', 'Employee could not be updated', array('status' => 500));
         }
         if ($site_id !== null && $wp_user_id > 0) {
             update_user_meta($wp_user_id, 'mg_default_site_id', (int) $site_id);
         }
+        if ($account === null && $wp_user_id > 0) {
+            $synced = $this->sync_employee_user($wp_user_id, $data);
+            if (is_wp_error($synced)) {
+                return $synced;
+            }
+        }
+        if ($account !== null && $account['send_invite']) {
+            wp_new_user_notification($new_user_id, null, 'user');
+        }
         return rest_ensure_response($this->employee_response($row));
+    }
+
+    /**
+     * WordPress users that can be linked to an employee: not linked yet, and
+     * never an administrator for someone who is not one.
+     */
+    public function route_employee_linkable_users(WP_REST_Request $request) {
+        $search = trim((string) $request->get_param('search'));
+        if (mb_strlen($search) < 2) {
+            return rest_ensure_response(array('ok' => true, 'items' => array()));
+        }
+        global $wpdb;
+        $linked = array_map('intval', (array) $wpdb->get_col($wpdb->prepare(
+            'SELECT DISTINCT wp_user_id FROM %i WHERE wp_user_id > 0',
+            MGWS_DB::table_employees()
+        )));
+        $query = new WP_User_Query(array(
+            'search' => '*' . $search . '*',
+            'search_columns' => array('user_login', 'user_email', 'display_name'),
+            'exclude' => $linked,
+            'number' => 20,
+            'orderby' => 'display_name',
+            'fields' => 'all',
+        ));
+        $items = array();
+        foreach ((array) $query->get_results() as $user) {
+            if (user_can($user, 'manage_options') && !current_user_can('manage_options')) {
+                continue;
+            }
+            $items[] = array(
+                'id' => (int) $user->ID,
+                'login' => (string) $user->user_login,
+                'display_name' => (string) $user->display_name,
+                'email' => (string) $user->user_email,
+            );
+        }
+        return rest_ensure_response(array('ok' => true, 'items' => $items));
+    }
+
+    /**
+     * Reads the "create a WordPress account" part of an employee request.
+     *
+     * Returns null when no account is asked for. The account gets only the
+     * role of an MGWS permission set (or no role at all), never one the
+     * author could not grant: creating an employee must not become a way to
+     * make administrators.
+     *
+     * @return array<string,mixed>|null|WP_Error
+     */
+    private function employee_account_from_request(WP_REST_Request $request, array $data, $linked_user_id, array $existing = array()) {
+        $body = $this->inventory_body($request);
+        if (empty($body['create_wp_user'])) {
+            return null;
+        }
+        if ((int) $linked_user_id > 0 || (int) ($data['wp_user_id'] ?? 0) > 0) {
+            return new WP_Error('mgws_conflict', 'The employee is already linked to a WordPress user', array('status' => 409));
+        }
+        if (!current_user_can('create_users') && !current_user_can('mgws_manage_employees')) {
+            return new WP_Error('mgws_forbidden', 'You cannot create WordPress users', array('status' => 403));
+        }
+        // The employee signs in with the work email; the personal one stays on
+        // the record for HR only.
+        $email = sanitize_email((string) ($data['work_email'] ?? ($existing['work_email'] ?? '')));
+        if ($email === '' || !is_email($email)) {
+            return new WP_Error('mgws_work_email_required', 'A work email is required to create the account', array('status' => 400));
+        }
+        $existing_user = email_exists($email);
+        if ($existing_user) {
+            return $this->employee_email_taken((int) $existing_user);
+        }
+        $username = array_key_exists('username', $body) ? sanitize_user((string) $body['username'], true) : $this->employee_username_from_email($email);
+        if ($username === '' || !validate_username($username)) {
+            return new WP_Error('mgws_bad_request', 'A valid username is required', array('status' => 400));
+        }
+        if (username_exists($username)) {
+            return new WP_Error('mgws_username_exists', 'This username is already taken', array('status' => 409));
+        }
+        $role = '';
+        $set_id = (int) ($body['permission_set_id'] ?? 0);
+        if ($set_id > 0) {
+            $set = MGWS_Permission_Sets::get($set_id);
+            if (!is_array($set) || !get_role((string) $set['role'])) {
+                return new WP_Error('mgws_bad_request', 'permission_set_id is not an existing permission set', array('status' => 400));
+            }
+            $guard = MGWS_Permission_Sets::assert_no_escalation((array) $set['capabilities']);
+            if (is_wp_error($guard)) {
+                return $guard;
+            }
+            $role = (string) $set['role'];
+        }
+        return array(
+            'username' => $username,
+            'email' => $email,
+            'role' => $role,
+            'send_invite' => !empty($body['send_invite']),
+        );
+    }
+
+    /**
+     * Creates the WordPress user of an employee. The password is random and
+     * never leaves the server: the employee sets their own through the
+     * invite email, and the app signs in with an application password.
+     *
+     * @return int|WP_Error
+     */
+    private function create_employee_user(array $account, array $data) {
+        $first = sanitize_text_field((string) ($data['first_name'] ?? ''));
+        $last = sanitize_text_field((string) ($data['last_name'] ?? ''));
+        $user_id = wp_insert_user(array(
+            'user_login' => $account['username'],
+            'user_email' => $account['email'],
+            'user_pass' => wp_generate_password(32, true, true),
+            'first_name' => $first,
+            'last_name' => $last,
+            'display_name' => trim($first . ' ' . $last) !== '' ? trim($first . ' ' . $last) : $account['username'],
+            // An empty role means no role: permissions come only from a set.
+            'role' => $account['role'],
+        ));
+        if (is_wp_error($user_id)) {
+            return new WP_Error('mgws_user_create_failed', $user_id->get_error_message(), array('status' => 400));
+        }
+        return (int) $user_id;
+    }
+
+    /**
+     * Login proposed from the work email: the part before the @, with a
+     * number added when it is taken (mario.rossi, mario.rossi2, ...).
+     */
+    private function employee_username_from_email($email) {
+        $base = sanitize_user(strtolower((string) strstr($email, '@', true)), true);
+        if ($base === '') {
+            $base = 'employee';
+        }
+        $base = mb_substr($base, 0, 50);
+        $candidate = $base;
+        for ($n = 2; username_exists($candidate) && $n < 1000; $n++) {
+            $candidate = $base . $n;
+        }
+        return $candidate;
+    }
+
+    /**
+     * 409 for a work email that already signs someone in. When that user is
+     * already an employee the app names them, because "link it instead"
+     * would point to a user the link list does not show.
+     */
+    private function employee_email_taken($user_id) {
+        global $wpdb;
+        $linked = $wpdb->get_row($wpdb->prepare(
+            'SELECT id, first_name, last_name FROM %i WHERE wp_user_id = %d LIMIT 1',
+            MGWS_DB::table_employees(),
+            (int) $user_id
+        ), ARRAY_A);
+        $data = array('status' => 409, 'user_id' => (int) $user_id);
+        if (is_array($linked)) {
+            $data['linked_employee_id'] = (int) $linked['id'];
+            $data['linked_employee_name'] = trim($linked['first_name'] . ' ' . $linked['last_name']);
+            return new WP_Error('mgws_email_exists', 'This email already signs in another employee', $data);
+        }
+        return new WP_Error('mgws_email_exists', 'A WordPress user with this email already exists: link it instead', $data);
+    }
+
+    /**
+     * Whether the caller may change the name and email of a linked user.
+     * Changing the email of an account is enough to take it over through a
+     * password reset, so it is refused on any account holding a capability
+     * the caller does not hold, administrators first.
+     */
+    private function can_edit_employee_user($user) {
+        if (current_user_can('manage_options')) {
+            return true;
+        }
+        if (user_can($user, 'manage_options')) {
+            return false;
+        }
+        $roles = wp_roles();
+        foreach ((array) $user->allcaps as $capability => $granted) {
+            if (!$granted || $roles->is_role($capability)) {
+                continue;
+            }
+            if (!current_user_can($capability)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Checks, before anything is saved, that a new work email can become the
+     * login email of the linked user.
+     */
+    private function employee_user_sync_check($wp_user_id, array $data) {
+        if (!array_key_exists('work_email', $data)) {
+            return true;
+        }
+        $user = get_user_by('id', (int) $wp_user_id);
+        $email = sanitize_email((string) $data['work_email']);
+        if (!$user || $email === '' || strcasecmp($email, (string) $user->user_email) === 0) {
+            return true;
+        }
+        if (!$this->can_edit_employee_user($user)) {
+            return new WP_Error('mgws_forbidden', 'You cannot change the login email of this user', array('status' => 403));
+        }
+        $owner = email_exists($email);
+        if ($owner && (int) $owner !== (int) $user->ID) {
+            return $this->employee_email_taken((int) $owner);
+        }
+        return true;
+    }
+
+    /**
+     * Copies names and work email of the record onto the linked user, so the
+     * login and the name shown in WordPress follow what HR edits in the app.
+     */
+    private function sync_employee_user($wp_user_id, array $data) {
+        $user = get_user_by('id', (int) $wp_user_id);
+        if (!$user || !$this->can_edit_employee_user($user)) {
+            return true;
+        }
+        $update = array('ID' => (int) $user->ID);
+        foreach (array('first_name', 'last_name') as $field) {
+            if (array_key_exists($field, $data)) {
+                $update[$field] = sanitize_text_field((string) $data[$field]);
+            }
+        }
+        if (isset($update['first_name']) || isset($update['last_name'])) {
+            $name = trim(($update['first_name'] ?? $user->first_name) . ' ' . ($update['last_name'] ?? $user->last_name));
+            if ($name !== '') {
+                $update['display_name'] = $name;
+            }
+        }
+        $email = array_key_exists('work_email', $data) ? sanitize_email((string) $data['work_email']) : '';
+        if ($email !== '' && strcasecmp($email, (string) $user->user_email) !== 0) {
+            $update['user_email'] = $email;
+        }
+        if (count($update) === 1) {
+            return true;
+        }
+        $result = wp_update_user($update);
+        return is_wp_error($result) ? new WP_Error('mgws_user_update_failed', $result->get_error_message(), array('status' => 400)) : true;
+    }
+
+    private function delete_employee_user($user_id) {
+        if (!function_exists('wp_delete_user')) {
+            require_once ABSPATH . 'wp-admin/includes/user.php';
+        }
+        wp_delete_user((int) $user_id);
+    }
+
+    /**
+     * One WordPress user belongs to one employee: two records on the same
+     * login would share its site and permissions without anyone noticing.
+     */
+    private function employee_link_conflict($wp_user_id, $employee_id) {
+        $wp_user_id = (int) $wp_user_id;
+        if ($wp_user_id <= 0) {
+            return true;
+        }
+        global $wpdb;
+        $other = (int) $wpdb->get_var($wpdb->prepare(
+            'SELECT id FROM %i WHERE wp_user_id = %d AND id <> %d LIMIT 1',
+            MGWS_DB::table_employees(),
+            $wp_user_id,
+            (int) $employee_id
+        ));
+        if ($other > 0) {
+            return new WP_Error('mgws_conflict', 'This WordPress user is already linked to another employee', array('status' => 409));
+        }
+        return true;
     }
 
     public function route_employee_delete(WP_REST_Request $request) {
@@ -3494,7 +4825,11 @@ class MGWS_REST_API {
     private function employee_payload(WP_REST_Request $request, $partial = false) {
         $body = $this->inventory_body($request);
         $data = array();
-        $fields = array('wp_user_id', 'first_name', 'last_name', 'email', 'phone', 'role_label', 'status', 'active', 'salary_cents', 'salary_currency', 'notes');
+        $fields = array(
+            'wp_user_id', 'first_name', 'last_name', 'email', 'work_email', 'phone', 'role_label', 'status', 'active',
+            'salary_cents', 'salary_currency', 'notes', 'weekly_schedule',
+            'contract_type', 'contract_level', 'contract_start', 'contract_end', 'contract_minutes_week',
+        );
         foreach ($fields as $field) {
             if (array_key_exists($field, $body)) {
                 $data[$field] = $body[$field];
@@ -3505,8 +4840,33 @@ class MGWS_REST_API {
                 return new WP_Error('mgws_bad_request', 'first_name and last_name are required', array('status' => 400));
             }
         }
-        if (isset($data['email']) && (string) $data['email'] !== '' && !is_email((string) $data['email'])) {
-            return new WP_Error('mgws_bad_request', 'Invalid email', array('status' => 400));
+        foreach (array('email', 'work_email') as $field) {
+            if (isset($data[$field]) && (string) $data[$field] !== '' && !is_email((string) $data[$field])) {
+                return new WP_Error('mgws_bad_request', 'Invalid ' . $field, array('status' => 400));
+            }
+        }
+        if (array_key_exists('weekly_schedule', $data) && $data['weekly_schedule'] !== null) {
+            $schedule = MGWS_Employee_Shifts::validate_schedule($data['weekly_schedule']);
+            if (is_wp_error($schedule)) {
+                return $schedule;
+            }
+            $data['weekly_schedule'] = $schedule;
+        }
+        if (isset($data['contract_type']) && (string) $data['contract_type'] !== '' && !in_array((string) $data['contract_type'], MGWS_Employee_Shifts::CONTRACT_TYPES, true)) {
+            return new WP_Error('mgws_bad_request', 'contract_type must be one of: ' . implode(', ', MGWS_Employee_Shifts::CONTRACT_TYPES), array('status' => 400));
+        }
+        foreach (array('contract_start', 'contract_end') as $field) {
+            if (array_key_exists($field, $data) && ($data[$field] === '' || $data[$field] === null)) {
+                $data[$field] = null;
+            } elseif (array_key_exists($field, $data) && !MGWS_Employee_Shifts::valid_date((string) $data[$field])) {
+                return new WP_Error('mgws_bad_request', $field . ' must be YYYY-MM-DD', array('status' => 400));
+            }
+        }
+        if (!empty($data['contract_start']) && !empty($data['contract_end']) && strcmp((string) $data['contract_end'], (string) $data['contract_start']) < 0) {
+            return new WP_Error('mgws_bad_request', 'contract_end must not be before contract_start', array('status' => 400));
+        }
+        if (isset($data['contract_minutes_week']) && ((int) $data['contract_minutes_week'] < 0 || (int) $data['contract_minutes_week'] > 10080)) {
+            return new WP_Error('mgws_bad_request', 'contract_minutes_week must be between 0 and 10080', array('status' => 400));
         }
         if (isset($data['wp_user_id']) && (int) $data['wp_user_id'] > 0 && !get_user_by('id', (int) $data['wp_user_id'])) {
             return new WP_Error('mgws_bad_request', 'wp_user_id does not exist', array('status' => 400));
@@ -3531,14 +4891,15 @@ class MGWS_REST_API {
      * che fa login e che il backend limita. Con piu' sedi e' obbligatoria per
      * chi ha un utente collegato; con una sola vale quella per tutti.
      */
-    private function employee_site_from_request(WP_REST_Request $request, $wp_user_id, $partial) {
+    private function employee_site_from_request(WP_REST_Request $request, $wp_user_id, $partial, $new_account = false) {
         $body = $this->inventory_body($request);
         $has_site = array_key_exists('site_id', $body);
         $site_id = $has_site ? (int) $body['site_id'] : 0;
-        if ((int) $wp_user_id <= 0) {
+        if ((int) $wp_user_id <= 0 && !$new_account) {
             return null;
         }
-        $target = get_user_by('id', (int) $wp_user_id);
+        // A brand new account has no role yet, so it is never an administrator.
+        $target = $new_account ? null : get_user_by('id', (int) $wp_user_id);
         if ($target && user_can($target, 'manage_options') && !current_user_can('manage_options')) {
             if ($has_site) {
                 return new WP_Error('mgws_forbidden', 'Only administrators can change the site of an administrator', array('status' => 403));
@@ -3559,9 +4920,11 @@ class MGWS_REST_API {
         return array(
             'id' => (int) $row['id'],
             'wp_user_id' => (int) ($row['wp_user_id'] ?? 0),
+            'wp_user_login' => $this->employee_user_login((int) ($row['wp_user_id'] ?? 0)),
             'first_name' => (string) ($row['first_name'] ?? ''),
             'last_name' => (string) ($row['last_name'] ?? ''),
             'email' => (string) ($row['email'] ?? ''),
+            'work_email' => (string) ($row['work_email'] ?? ''),
             'phone' => (string) ($row['phone'] ?? ''),
             'role_label' => (string) ($row['role_label'] ?? ''),
             'status' => (string) ($row['status'] ?? (((int) ($row['active'] ?? 1)) === 1 ? 'active' : 'inactive')),
@@ -3569,10 +4932,208 @@ class MGWS_REST_API {
             'salary_cents' => (int) ($row['salary_cents'] ?? 0),
             'salary_currency' => (string) ($row['salary_currency'] ?? 'EUR'),
             'notes' => (string) ($row['notes'] ?? ''),
+            'weekly_schedule' => MGWS_Employee_Shifts::decode_schedule($row['weekly_schedule'] ?? null),
+            'schedule_minutes_week' => MGWS_Employee_Shifts::schedule_minutes_week(MGWS_Employee_Shifts::decode_schedule($row['weekly_schedule'] ?? null)),
+            'contract_type' => (string) ($row['contract_type'] ?? ''),
+            'contract_level' => (string) ($row['contract_level'] ?? ''),
+            'contract_start' => (string) ($row['contract_start'] ?? ''),
+            'contract_end' => (string) ($row['contract_end'] ?? ''),
+            'contract_minutes_week' => (int) ($row['contract_minutes_week'] ?? 0),
             'site_id' => ((int) ($row['wp_user_id'] ?? 0)) > 0 ? (int) get_user_meta((int) $row['wp_user_id'], 'mg_default_site_id', true) : 0,
             'created_at_gmt' => (string) ($row['created_at_gmt'] ?? ''),
             'updated_at_gmt' => (string) ($row['updated_at_gmt'] ?? ''),
         );
+    }
+
+    private function employee_user_login($wp_user_id) {
+        $user = $wp_user_id > 0 ? get_user_by('id', $wp_user_id) : false;
+        return $user ? (string) $user->user_login : '';
+    }
+
+    /**
+     * The employee of a nested route, or the 404 every nested route answers.
+     */
+    private function employee_or_404(WP_REST_Request $request) {
+        $row = MGWS_DB::get_employee((int) $request->get_param('employee_id'));
+        if (!is_array($row)) {
+            return new WP_Error('mgws_employee_not_found', 'Employee not found', array('status' => 404));
+        }
+        return $row;
+    }
+
+    /**
+     * Period of a shift request: from/to as YYYY-MM-DD, at most $max days.
+     * Without them, the current week.
+     *
+     * @return array{0:string,1:string}|WP_Error
+     */
+    private function shift_period(array $source, $max_days) {
+        $from = (string) ($source['from'] ?? '');
+        $to = (string) ($source['to'] ?? '');
+        if ($from === '' && $to === '') {
+            $monday = new DateTimeImmutable('monday this week', wp_timezone());
+            return array($monday->format('Y-m-d'), $monday->modify('+6 days')->format('Y-m-d'));
+        }
+        if (!MGWS_Employee_Shifts::valid_date($from) || !MGWS_Employee_Shifts::valid_date($to)) {
+            return new WP_Error('mgws_bad_request', 'from and to must be YYYY-MM-DD', array('status' => 400));
+        }
+        $days = (int) ((strtotime($to . ' UTC') - strtotime($from . ' UTC')) / 86400) + 1;
+        if ($days < 1 || $days > $max_days) {
+            return new WP_Error('mgws_bad_request', sprintf('The period must be from 1 to %d days', $max_days), array('status' => 400));
+        }
+        return array($from, $to);
+    }
+
+    public function route_employee_shifts_list(WP_REST_Request $request) {
+        $employee = $this->employee_or_404($request);
+        if (is_wp_error($employee)) {
+            return $employee;
+        }
+        $period = $this->shift_period($request->get_params(), MGWS_Employee_Shifts::MAX_LIST_DAYS);
+        if (is_wp_error($period)) {
+            return $period;
+        }
+        $rows = MGWS_Employee_Shifts::list_for((int) $employee['id'], $period[0], $period[1]);
+        return rest_ensure_response(array(
+            'ok' => true,
+            'from' => $period[0],
+            'to' => $period[1],
+            'items' => array_map(array('MGWS_Employee_Shifts', 'response'), $rows),
+            'summary' => MGWS_Employee_Shifts::summary($rows, (int) $employee['contract_minutes_week'], $period[0], $period[1]),
+        ));
+    }
+
+    public function route_employee_shift_create(WP_REST_Request $request) {
+        $employee = $this->employee_or_404($request);
+        if (is_wp_error($employee)) {
+            return $employee;
+        }
+        $row = MGWS_Employee_Shifts::create((int) $employee['id'], $this->inventory_body($request), get_current_user_id());
+        return is_wp_error($row) ? $row : rest_ensure_response(MGWS_Employee_Shifts::response($row));
+    }
+
+    /**
+     * The shift of a nested route, only if it belongs to that employee: an id
+     * from another employee answers 404, not someone else's shift.
+     */
+    private function employee_shift_or_404(WP_REST_Request $request) {
+        $row = MGWS_Employee_Shifts::get((int) $request->get_param('shift_id'));
+        if (!is_array($row) || (int) $row['employee_id'] !== (int) $request->get_param('employee_id')) {
+            return new WP_Error('mgws_shift_not_found', 'Shift not found', array('status' => 404));
+        }
+        return $row;
+    }
+
+    public function route_employee_shift_update(WP_REST_Request $request) {
+        $existing = $this->employee_shift_or_404($request);
+        if (is_wp_error($existing)) {
+            return $existing;
+        }
+        $row = MGWS_Employee_Shifts::update($existing, $this->inventory_body($request));
+        return is_wp_error($row) ? $row : rest_ensure_response(MGWS_Employee_Shifts::response($row));
+    }
+
+    public function route_employee_shift_delete(WP_REST_Request $request) {
+        $existing = $this->employee_shift_or_404($request);
+        if (is_wp_error($existing)) {
+            return $existing;
+        }
+        MGWS_Employee_Shifts::delete((int) $existing['id']);
+        return rest_ensure_response(array('ok' => true, 'deleted' => (int) $existing['id']));
+    }
+
+    public function route_employee_shifts_generate(WP_REST_Request $request) {
+        $employee = $this->employee_or_404($request);
+        if (is_wp_error($employee)) {
+            return $employee;
+        }
+        $body = $this->inventory_body($request);
+        $period = $this->shift_period($body, MGWS_Employee_Shifts::MAX_GENERATE_DAYS);
+        if (is_wp_error($period)) {
+            return $period;
+        }
+        $schedule = MGWS_Employee_Shifts::decode_schedule($employee['weekly_schedule'] ?? null);
+        if (MGWS_Employee_Shifts::schedule_minutes_week($schedule) === 0) {
+            return new WP_Error('mgws_schedule_empty', 'The employee has no usual week to copy', array('status' => 400));
+        }
+        $result = MGWS_Employee_Shifts::generate((int) $employee['id'], $schedule, $period[0], $period[1], !empty($body['replace']), get_current_user_id());
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response(array_merge(array('ok' => true, 'from' => $period[0], 'to' => $period[1]), $result));
+    }
+
+    public function route_employee_documents_list(WP_REST_Request $request) {
+        $employee = $this->employee_or_404($request);
+        if (is_wp_error($employee)) {
+            return $employee;
+        }
+        return rest_ensure_response(array(
+            'ok' => true,
+            'items' => array_map(array('MGWS_Employee_Files', 'response'), MGWS_Employee_Files::list_for((int) $employee['id'])),
+        ));
+    }
+
+    /**
+     * Upload as JSON with the file in base64: one request shape for every
+     * client, and the type is read from the bytes, not from the request.
+     */
+    public function route_employee_document_upload(WP_REST_Request $request) {
+        $employee = $this->employee_or_404($request);
+        if (is_wp_error($employee)) {
+            return $employee;
+        }
+        $body = $this->inventory_body($request);
+        $encoded = (string) ($body['content_base64'] ?? '');
+        // Base64 is a third larger than the file: refuse before decoding.
+        if (strlen($encoded) > (int) ceil(MGWS_Employee_Files::MAX_BYTES * 4 / 3) + 4) {
+            return new WP_Error('mgws_file_too_large', 'The file is larger than 10 MB', array('status' => 413));
+        }
+        $bytes = base64_decode($encoded, true);
+        if ($bytes === false) {
+            return new WP_Error('mgws_bad_request', 'content_base64 is not valid base64', array('status' => 400));
+        }
+        $row = MGWS_Employee_Files::store(
+            (int) $employee['id'],
+            (string) ($body['kind'] ?? 'other'),
+            (string) ($body['title'] ?? ''),
+            (string) ($body['file_name'] ?? ''),
+            $bytes,
+            get_current_user_id()
+        );
+        return is_wp_error($row) ? $row : rest_ensure_response(MGWS_Employee_Files::response($row));
+    }
+
+    private function employee_document_or_404(WP_REST_Request $request) {
+        $row = MGWS_Employee_Files::get((int) $request->get_param('document_id'));
+        if (!is_array($row) || (int) $row['employee_id'] !== (int) $request->get_param('employee_id')) {
+            return new WP_Error('mgws_document_not_found', 'Document not found', array('status' => 404));
+        }
+        return $row;
+    }
+
+    public function route_employee_document_download(WP_REST_Request $request) {
+        $row = $this->employee_document_or_404($request);
+        if (is_wp_error($row)) {
+            return $row;
+        }
+        $bytes = MGWS_Employee_Files::read($row);
+        if (is_wp_error($bytes)) {
+            return $bytes;
+        }
+        $response = rest_ensure_response(array_merge(MGWS_Employee_Files::response($row), array('content_base64' => base64_encode($bytes))));
+        // Personal data: no proxy or browser keeps a copy.
+        $response->header('Cache-Control', 'no-store, private');
+        return $response;
+    }
+
+    public function route_employee_document_delete(WP_REST_Request $request) {
+        $row = $this->employee_document_or_404($request);
+        if (is_wp_error($row)) {
+            return $row;
+        }
+        MGWS_Employee_Files::delete($row);
+        return rest_ensure_response(array('ok' => true, 'deleted' => (int) $row['id']));
     }
 
     public function route_health(WP_REST_Request $request) {
@@ -3828,11 +5389,23 @@ class MGWS_REST_API {
         if (is_wp_error($site_id)) {
             return $site_id;
         }
-        $result = $this->inventory_set_total($product_id, $variation_id, $woo_stock, $note, '', null, $site_id);
+
+        // The number that matters is the one WooCommerce holds, not the one the
+        // client sent: a sale between the app reading the product and this
+        // request arriving would make the payload stale, and writing a stale
+        // total is how a sync loses a sale. The payload is still required —
+        // it is the app saying "this is the total I meant to push" — and when it
+        // disagrees with the server the answer says so instead of hiding it.
+        $server_total = MGWS_Woo_Stock::current_total((int) $product_id, (int) $variation_id);
+        $authoritative = $server_total ?? (int) $woo_stock;
+
+        $result = $this->inventory_set_total($product_id, $variation_id, $authoritative, $note, '', null, $site_id);
         if (is_wp_error($result)) {
             return $result;
         }
-        $this->sync_woo_stock($product_id, $variation_id);
+        // WooCommerce is the source here: the total we just wrote is its own
+        // number, so pushing it back would be a no-op at best and a lost
+        // concurrent sale at worst.
 
         return rest_ensure_response(array_merge(array(
             'ok' => true,
@@ -3842,6 +5415,12 @@ class MGWS_REST_API {
             'site_id' => $site_id,
             'woo_stock' => $woo_stock,
             'sync_type' => $sync_type,
+            // What the server actually wrote, and whether the payload was still
+            // current when it arrived. A product that does not manage stock has
+            // no server total, and then the payload is all there is.
+            'woo_stock_server' => $server_total,
+            'woo_stock_source' => $server_total === null ? 'request' : 'server',
+            'woo_stock_mismatch' => $server_total !== null && $server_total !== (int) $woo_stock,
         ), $result));
     }
 
@@ -3890,11 +5469,35 @@ class MGWS_REST_API {
         if (is_wp_error($movement_key)) {
             return $movement_key;
         }
+        // The physical count is absolute, but WooCommerce is applied as a delta:
+        // a sale that happens while the operator is counting must not be erased
+        // by writing the counted number as a total.
+        //
+        // Which delta depends on what the counted number describes. On a
+        // single-site shop it is the store total, so the delta is measured
+        // against the total WooCommerce holds right now: that is what closes a
+        // divergence instead of adding it back. On a multi-site shop it is one
+        // site's total, and one site cannot speak for the store: subtracting it
+        // from the store-wide WooCommerce number would wipe every other site.
+        // There the store total has to move by exactly the change of this site,
+        // which is the ledger delta the write already computed. A divergence
+        // that spans the store belongs to the reconciler, not to a site count.
+        $counts_for_the_store = !$this->inventory_requires_site_scope();
+        $woo_before = MGWS_Woo_Stock::current_total((int) $product_id, (int) $variation_id);
         $result = $this->inventory_set_total($product_id, $variation_id, $correct_stock, 'Inventory reconcile: ' . $audit_reason, $movement_key, $audit_reason, $site_id);
         if (is_wp_error($result)) {
             return $result;
         }
-        $this->sync_woo_stock($product_id, $variation_id);
+        $woo_plan = MGWS_Stock_Plan::woo_delta(
+            (int) $correct_stock,
+            $woo_before,
+            $counts_for_the_store,
+            (int) ($result['delta'] ?? 0)
+        );
+        $woo_delta = $woo_plan['delta'];
+        if ($woo_delta !== null) {
+            MGWS_Woo_Stock::commit_delta((int) $product_id, (int) $variation_id, $woo_delta);
+        }
 
         return rest_ensure_response(array_merge(array(
             'ok' => true,
@@ -3908,6 +5511,41 @@ class MGWS_REST_API {
             'site_id' => $site_id,
             'correct_stock' => $correct_stock,
             'reason' => $reason,
+            // What WooCommerce held before the correction, the delta that was
+            // applied to it, and what that delta was measured on. Null when the
+            // product does not manage stock, because then there is no
+            // WooCommerce total to move.
+            'woo_stock_before' => $woo_before,
+            'woo_delta' => $woo_delta,
+            'woo_delta_basis' => $woo_plan['basis'],
+        ), $result));
+    }
+
+    /**
+     * Riconcilia ogni articolo che WooCommerce o il ledger conoscono.
+     *
+     * E' la stessa cosa che fa lo sweep notturno, chiesta a mano. Non prende
+     * parametri di proposito: una riconciliazione parziale che si presenta come
+     * completa e' peggio di nessuna riconciliazione, perche' lascia credere che
+     * il resto sia a posto.
+     */
+    public function route_inventory_stock_reconcile_all(WP_REST_Request $request) {
+        $storage = $this->require_inventory_restock_storage();
+        if (is_wp_error($storage)) {
+            return $storage;
+        }
+
+        $result = MGWS_Stock_Reconciler::reconcile_all('manual');
+        if (empty($result['ok'])) {
+            if ((string) ($result['reason'] ?? '') === 'busy') {
+                return new WP_Error('mgws_conflict', 'A reconciliation is already running', array('status' => 409));
+            }
+            return new WP_Error('mgws_error', 'Reconciliation failed', array('status' => 500));
+        }
+
+        return rest_ensure_response(array_merge(array(
+            'ok' => true,
+            'operation' => 'stock_reconcile_all',
         ), $result));
     }
 
@@ -4011,7 +5649,15 @@ class MGWS_REST_API {
             $wpdb->query('ROLLBACK');
             return new WP_Error('mgws_conflict', (string) ($from_res['message'] ?? __('Not enough stock in the source warehouse', 'mg-warehouse-stock')), array('status' => 409));
         }
-        $to_res = MGWS_DB::apply_delta_level($to_warehouse_id, $product_id, $variation_id, $quantity, $to_level['room'], $to_level['rack'], $to_level['shelf']);
+        // Il trasferimento non cambia il valore della merce: l'arrivo entra al
+        // costo medio che la partenza ha appena scaricato. Se il valore della
+        // sorgente e' ignoto resta ignoto anche a destinazione, invece di
+        // inventare il costo medio del magazzino che riceve.
+        $transfer_value_delta = $from_res['value_delta_cents'] ?? null;
+        $transfer_unit_cost = $transfer_value_delta === null
+            ? null
+            : MGWS_Cost_Plan::average_cents(abs((int) $transfer_value_delta), $quantity);
+        $to_res = MGWS_DB::apply_delta_level($to_warehouse_id, $product_id, $variation_id, $quantity, $to_level['room'], $to_level['rack'], $to_level['shelf'], $transfer_unit_cost);
         if (empty($to_res['ok'])) {
             $wpdb->query('ROLLBACK');
             return new WP_Error('mgws_conflict', (string) ($to_res['message'] ?? __('Could not record the entry into the destination warehouse', 'mg-warehouse-stock')), array('status' => 409));
@@ -4045,7 +5691,7 @@ class MGWS_REST_API {
             $audit_note,
             $from_warehouse_id,
             $to_warehouse_id,
-            array_merge($shared, array('stock_before' => $from_before, 'stock_after' => $from_before - $quantity))
+            array_merge($shared, array('stock_before' => $from_before, 'stock_after' => $from_before - $quantity, 'unit_cost_cents' => $transfer_unit_cost, 'value_delta_cents' => $transfer_value_delta))
         );
         $in_row = MGWS_DB::insert_move(
             'in',
@@ -4062,7 +5708,7 @@ class MGWS_REST_API {
             $audit_note,
             $from_warehouse_id,
             $to_warehouse_id,
-            array_merge($shared, array('stock_before' => $to_before, 'stock_after' => $to_before + $quantity))
+            array_merge($shared, array('stock_before' => $to_before, 'stock_after' => $to_before + $quantity, 'unit_cost_cents' => $transfer_unit_cost, 'value_delta_cents' => $to_res['value_delta_cents'] ?? null))
         );
         if (!$out_row || !$in_row) {
             $wpdb->query('ROLLBACK');
@@ -4117,6 +5763,830 @@ class MGWS_REST_API {
         }
 
         return array('site_id' => (int) $site_id, 'warehouse_id' => $warehouse_id, 'room' => $room, 'rack' => $rack, 'shelf' => $shelf);
+    }
+
+    // ---- Costs
+
+    /**
+     * Declared cost history of one item, with the value it currently holds.
+     *
+     * The two numbers answer different questions and are returned together on
+     * purpose: the declared cost is what the shop says the item costs, the level
+     * value is what the pieces in stock are actually worth after the average.
+     */
+    public function route_inventory_cost_product(WP_REST_Request $request) {
+        $product_id = (int) $request->get_param('product_id');
+        $variation_id = (int) ($request->get_param('variation_id') ?? 0);
+        $limit = (int) ($request->get_param('limit') ?? 50);
+        if ($product_id <= 0 || $variation_id < 0) {
+            return new WP_Error('mgws_bad_request', 'Invalid product identifier', array('status' => 400));
+        }
+
+        $row = MGWS_DB::get_latest_declared_cost($product_id, $variation_id);
+        $history = MGWS_DB::get_declared_cost_history($product_id, $variation_id, $limit);
+        // A withdrawal is a row with a null cost, not a missing row: casting it
+        // to zero would turn "we do not know" into "it costs nothing".
+        $declared_cents = $row === null || $row['cost_cents'] === null ? null : (int) $row['cost_cents'];
+        $stock = MGWS_DB::sum_value_for_item($product_id, $variation_id);
+        $qty = (int) ($stock['qty'] ?? 0);
+        $value_cents = (int) ($stock['value_cents'] ?? 0);
+        $unvalued_qty = (int) ($stock['unvalued_qty'] ?? 0);
+        // A level whose value is unknown makes the whole item unvalued, even when
+        // the other levels have one: summing known values would hide the gap.
+        $value_cents_out = $unvalued_qty > 0 ? null : $value_cents;
+        $unit_cost_cents = MGWS_Cost_Plan::average_cents($value_cents_out, $qty);
+
+        return rest_ensure_response(array(
+            'ok' => true,
+            'product_id' => $product_id,
+            'variation_id' => $variation_id,
+            'minor_unit' => MGWS_Cost::minor_unit(),
+            'cost_cents' => $declared_cents,
+            'cost' => MGWS_Cost::from_cents($declared_cents),
+            'cost_source' => $row === null ? null : (string) $row['source'],
+            'cost_valid_from_gmt' => $row === null ? null : (string) $row['valid_from_gmt'],
+            'cost_inherited_from_parent' => $row !== null && $variation_id > 0 && (int) $row['variation_id'] === 0,
+            'history' => array_map(array($this, 'inventory_cost_history_row'), (array) $history),
+            'stock' => array(
+                'qty' => $qty,
+                'value_cents' => $value_cents_out,
+                'value' => MGWS_Cost::from_cents($value_cents_out),
+                'unit_cost_cents' => $unit_cost_cents,
+                'unit_cost' => MGWS_Cost::from_cents($unit_cost_cents),
+                'unvalued_qty' => $unvalued_qty,
+            ),
+            'cogs_enabled' => MGWS_Cost::cogs_enabled(),
+        ));
+    }
+
+    private function inventory_cost_history_row($row) {
+        $cents = isset($row['cost_cents']) && $row['cost_cents'] !== null ? (int) $row['cost_cents'] : null;
+        return array(
+            'id' => (int) ($row['id'] ?? 0),
+            'cost_cents' => $cents,
+            'cost' => MGWS_Cost::from_cents($cents),
+            'valid_from_gmt' => (string) ($row['valid_from_gmt'] ?? ''),
+            'source' => (string) ($row['source'] ?? ''),
+            'note' => $row['note'] ?? null,
+            'created_by' => (int) ($row['created_by'] ?? 0),
+            'created_at_gmt' => (string) ($row['created_at_gmt'] ?? ''),
+        );
+    }
+
+    /**
+     * Declares a cost. Append-only: a correction is a new row, never an edit.
+     */
+    public function route_inventory_cost_declare(WP_REST_Request $request) {
+        $body = $this->inventory_body($request);
+        $product_id = $this->inventory_positive($body['product_id'] ?? null, 'product_id');
+        $variation_id = $this->inventory_non_negative($body['variation_id'] ?? 0, 'variation_id');
+        $note = $this->inventory_restock_text($body['note'] ?? '', 'note', 4000, false, true);
+        $valid_from = $this->inventory_restock_text($body['valid_from_gmt'] ?? '', 'valid_from_gmt', 32);
+        if (is_wp_error($product_id) || is_wp_error($variation_id) || is_wp_error($note) || is_wp_error($valid_from)) {
+            return is_wp_error($product_id) ? $product_id : (is_wp_error($variation_id) ? $variation_id : (is_wp_error($note) ? $note : $valid_from));
+        }
+        if ($valid_from !== '' && strtotime($valid_from) === false) {
+            return new WP_Error('mgws_bad_request', 'valid_from_gmt must be a date', array('status' => 400));
+        }
+
+        // `cost` is required in the payload but may be null, which is how a
+        // declaration is withdrawn without deleting history.
+        if (!array_key_exists('cost', $body)) {
+            return new WP_Error('mgws_bad_request', 'cost is required', array('status' => 400));
+        }
+        $cost_cents = $this->inventory_optional_money($body['cost'], 'cost');
+        if (is_wp_error($cost_cents)) {
+            return $cost_cents;
+        }
+
+        // Optional: also set the value of the stock in hand to this cost. It is
+        // the only path that changes a value without a movement, so it stays
+        // opt-in and is recorded in the declaration note.
+        $revalue_stock = filter_var($body['revalue_stock'] ?? false, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        if ($revalue_stock === null) {
+            return new WP_Error('mgws_bad_request', 'revalue_stock must be a boolean', array('status' => 400));
+        }
+
+        $result = MGWS_Cost::declare(
+            $product_id,
+            $variation_id,
+            $cost_cents,
+            'manual',
+            $note !== '' ? $note : null,
+            get_current_user_id(),
+            $valid_from !== '' ? $valid_from : null,
+            (bool) $revalue_stock
+        );
+        if (empty($result['ok'])) {
+            return new WP_Error('mgws_error', (string) ($result['message'] ?? 'Could not store the declared cost'), array('status' => 500));
+        }
+        $result['minor_unit'] = MGWS_Cost::minor_unit();
+        return rest_ensure_response($result);
+    }
+
+    /**
+     * Items holding stock with at least one level whose value is unknown.
+     *
+     * "Without cost" means "without value": an item valued by real receipts
+     * needs no declaration, but an item whose pieces have no value cannot have
+     * a margin.
+     */
+    public function route_inventory_cost_missing(WP_REST_Request $request) {
+        $limit = (int) ($request->get_param('limit') ?? 100);
+        $offset = (int) ($request->get_param('offset') ?? 0);
+        $limit = max(1, min(500, $limit));
+        $offset = max(0, $offset);
+
+        $rows = MGWS_DB::missing_cost_items($limit, $offset);
+        $items = array();
+        foreach ($rows as $row) {
+            $product_id = (int) ($row['product_id'] ?? 0);
+            $variation_id = (int) ($row['variation_id'] ?? 0);
+            $declared = MGWS_DB::get_latest_declared_cost($product_id, $variation_id);
+            $declared_cents = $declared === null || $declared['cost_cents'] === null ? null : (int) $declared['cost_cents'];
+            $items[] = array(
+                'product_id' => $product_id,
+                'variation_id' => $variation_id,
+                'qty' => (int) ($row['qty'] ?? 0),
+                'unvalued_qty' => (int) ($row['unvalued_qty'] ?? 0),
+                'name' => $this->inventory_cost_item_name($product_id, $variation_id),
+                'sku' => $this->inventory_cost_item_sku($product_id, $variation_id),
+                'declared_cost_cents' => $declared_cents,
+                'declared_cost' => MGWS_Cost::from_cents($declared_cents),
+            );
+        }
+
+        return rest_ensure_response(array(
+            'ok' => true,
+            'minor_unit' => MGWS_Cost::minor_unit(),
+            'total' => MGWS_DB::count_missing_cost_items(),
+            'limit' => $limit,
+            'offset' => $offset,
+            'items' => $items,
+        ));
+    }
+
+    public function route_inventory_stock_divergences(WP_REST_Request $request) {
+        $limit = (int) ($request->get_param('limit') ?? 100);
+        $offset = (int) ($request->get_param('offset') ?? 0);
+        $limit = max(1, min(500, $limit));
+        $offset = max(0, $offset);
+
+        // The comparison is a read: the reconciliation that closes the
+        // differences is a separate, explicit decision.
+        $result = MGWS_Stock_Reconciler::divergences($limit, $offset);
+        $items = array();
+        foreach ((array) ($result['items'] ?? array()) as $row) {
+            $items[] = array(
+                'product_id' => (int) ($row['product_id'] ?? 0),
+                'variation_id' => (int) ($row['variation_id'] ?? 0),
+                'name' => (string) ($row['name'] ?? ''),
+                'sku' => (string) ($row['sku'] ?? ''),
+                'woo_stock' => (int) ($row['woo_stock'] ?? 0),
+                'mgws_stock' => (int) ($row['mgws_stock'] ?? 0),
+                'difference' => (int) ($row['difference'] ?? 0),
+                'site_id' => $row['site_id'] === null ? null : (int) $row['site_id'],
+            );
+        }
+
+        return rest_ensure_response(array(
+            'ok' => true,
+            'limit' => $limit,
+            'offset' => $offset,
+            'total' => (int) ($result['total'] ?? 0),
+            'items' => $items,
+        ));
+    }
+
+    /** Display name of an item, or an empty string when the product is gone. */
+    private function inventory_cost_item_name($product_id, $variation_id) {
+        if (!function_exists('wc_get_product')) {
+            return '';
+        }
+        $product = wc_get_product((int) $variation_id > 0 ? (int) $variation_id : (int) $product_id);
+        return $product && method_exists($product, 'get_name') ? (string) $product->get_name() : '';
+    }
+
+    private function inventory_cost_item_sku($product_id, $variation_id) {
+        if (!function_exists('wc_get_product')) {
+            return '';
+        }
+        $product = wc_get_product((int) $variation_id > 0 ? (int) $variation_id : (int) $product_id);
+        return $product && method_exists($product, 'get_sku') ? (string) $product->get_sku() : '';
+    }
+
+    /**
+     * Runs backfill step A (declared costs from purchase documents) and step B
+     * (seed the value of levels that have none). Safe to run more than once.
+     */
+    public function route_inventory_cost_backfill(WP_REST_Request $request) {
+        $result = MGWS_Cost::backfill(get_current_user_id());
+        if (empty($result['ok'])) {
+            return new WP_Error('mgws_error', (string) ($result['message'] ?? 'Backfill failed'), array('status' => 500));
+        }
+        return rest_ensure_response($result);
+    }
+
+    public function route_inventory_cost_report(WP_REST_Request $request) {
+        return rest_ensure_response(MGWS_Cost::report());
+    }
+
+    public function route_inventory_stock_reset(WP_REST_Request $request) {
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $warehouse_id = (int) ($body['warehouse_id'] ?? 0);
+        $target_qty = (int) ($body['target_qty'] ?? 0);
+        if ($target_qty < 0) {
+            $target_qty = 0;
+        }
+        $product_ids = isset($body['product_ids']) && is_array($body['product_ids']) ? $body['product_ids'] : array();
+
+        if ($warehouse_id <= 0) {
+            return new WP_Error('mgws_bad_request', 'Invalid warehouse', array('status' => 400));
+        }
+
+        $site_limit = $this->get_user_site_limit(get_current_user_id());
+        $wh_site = MGWS_DB::get_site_id_for_warehouse($warehouse_id);
+        if ($wh_site <= 0) {
+            return new WP_Error('mgws_bad_request', 'Warehouse has no site', array('status' => 400));
+        }
+        if ($site_limit > 0 && (int) $wh_site !== (int) $site_limit) {
+            return new WP_Error('mgws_forbidden', 'Warehouse outside allowed site', array('status' => 403));
+        }
+
+        $dry_run = !empty($body['dry_run']);
+        $result = MGWS_Stock_Reset::reset_warehouse($warehouse_id, $target_qty, $product_ids, (int) get_current_user_id(), $dry_run);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response($result);
+    }
+
+    public function route_supplier_prices_list(WP_REST_Request $request) {
+        $supplier_id = (int) $request->get_param('supplier_id');
+        $product_id = (int) $request->get_param('product_id');
+        $variation_id = (int) $request->get_param('variation_id');
+        $rows = MGWS_Supplier_Price_History::list($supplier_id, $product_id, $variation_id);
+        return rest_ensure_response(is_array($rows) ? $rows : array());
+    }
+
+    public function route_supplier_prices_create(WP_REST_Request $request) {
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $result = MGWS_Supplier_Price_History::create(
+            (int) ($body['supplier_id'] ?? 0),
+            (int) ($body['product_id'] ?? 0),
+            (int) ($body['variation_id'] ?? 0),
+            (int) ($body['price_cents'] ?? 0),
+            (string) ($body['currency'] ?? 'EUR'),
+            isset($body['note']) ? (string) $body['note'] : '',
+            (int) get_current_user_id()
+        );
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response($result);
+    }
+
+    public function route_shipments_list(WP_REST_Request $request) {
+        $reference_type = (string) $request->get_param('reference_type');
+        $reference_id = (int) $request->get_param('reference_id');
+        $status = (string) $request->get_param('status');
+        $rows = MGWS_Shipments::list($reference_type, $reference_id, $status);
+        return rest_ensure_response(is_array($rows) ? $rows : array());
+    }
+
+    public function route_shipments_create(WP_REST_Request $request) {
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $result = MGWS_Shipments::create(
+            (string) ($body['reference_type'] ?? ''),
+            (int) ($body['reference_id'] ?? 0),
+            (string) ($body['carrier'] ?? ''),
+            (string) ($body['tracking_number'] ?? ''),
+            isset($body['note']) ? (string) $body['note'] : '',
+            (int) get_current_user_id()
+        );
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response($result);
+    }
+
+    public function route_shipment_get(WP_REST_Request $request) {
+        $id = (int) $request->get_param('shipment_id');
+        $row = MGWS_Shipments::get($id);
+        if (!is_array($row)) {
+            return new WP_Error('mgws_not_found', 'Shipment not found', array('status' => 404));
+        }
+        return rest_ensure_response($row);
+    }
+
+    public function route_shipment_status(WP_REST_Request $request) {
+        $id = (int) $request->get_param('shipment_id');
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $result = MGWS_Shipments::update_status(
+            $id,
+            (string) ($body['status'] ?? ''),
+            isset($body['shipped_at_gmt']) ? (string) $body['shipped_at_gmt'] : null,
+            isset($body['delivered_at_gmt']) ? (string) $body['delivered_at_gmt'] : null
+        );
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response($result);
+    }
+
+    public function route_shipment_delete(WP_REST_Request $request) {
+        $id = (int) $request->get_param('shipment_id');
+        $result = MGWS_Shipments::delete($id);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response(array('ok' => true));
+    }
+
+    public function route_reservations_list(WP_REST_Request $request) {
+        $status = (string) $request->get_param('status');
+        $product_id = (int) $request->get_param('product_id');
+        $variation_id = (int) $request->get_param('variation_id');
+        $warehouse_id = (int) $request->get_param('warehouse_id');
+        $rows = MGWS_Reservations::list($status, $product_id, $variation_id, $warehouse_id);
+        return rest_ensure_response(is_array($rows) ? $rows : array());
+    }
+
+    public function route_reservations_create(WP_REST_Request $request) {
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $result = MGWS_Reservations::create(
+            (int) ($body['product_id'] ?? 0),
+            (int) ($body['variation_id'] ?? 0),
+            (int) ($body['warehouse_id'] ?? 0),
+            (int) ($body['qty'] ?? 0),
+            (string) ($body['reserved_for'] ?? ''),
+            isset($body['expires_at_gmt']) ? (string) $body['expires_at_gmt'] : '',
+            isset($body['note']) ? (string) $body['note'] : '',
+            (int) get_current_user_id()
+        );
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response($result);
+    }
+
+    public function route_reservation_release(WP_REST_Request $request) {
+        $id = (int) $request->get_param('reservation_id');
+        $result = MGWS_Reservations::release($id);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response($result);
+    }
+
+    public function route_reservation_consume(WP_REST_Request $request) {
+        $id = (int) $request->get_param('reservation_id');
+        $result = MGWS_Reservations::consume($id);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response($result);
+    }
+
+    public function route_reservation_delete(WP_REST_Request $request) {
+        $id = (int) $request->get_param('reservation_id');
+        $result = MGWS_Reservations::delete($id);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response(array('ok' => true));
+    }
+
+    public function route_payments_list(WP_REST_Request $request) {
+        $reference_type = (string) $request->get_param('reference_type');
+        $reference_id = (int) $request->get_param('reference_id');
+        $rows = MGWS_Payments::list($reference_type, $reference_id);
+        return rest_ensure_response(is_array($rows) ? $rows : array());
+    }
+
+    public function route_payments_create(WP_REST_Request $request) {
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $result = MGWS_Payments::create(
+            (string) ($body['reference_type'] ?? ''),
+            (int) ($body['reference_id'] ?? 0),
+            (int) ($body['amount_cents'] ?? 0),
+            (string) ($body['currency'] ?? 'EUR'),
+            isset($body['paid_at_gmt']) ? (string) $body['paid_at_gmt'] : '',
+            (string) ($body['method'] ?? ''),
+            isset($body['note']) ? (string) $body['note'] : '',
+            (int) get_current_user_id()
+        );
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response($result);
+    }
+
+    public function route_payment_delete(WP_REST_Request $request) {
+        $id = (int) $request->get_param('payment_id');
+        $result = MGWS_Payments::delete($id);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response(array('ok' => true));
+    }
+
+    public function route_payments_aging(WP_REST_Request $request) {
+        // Collect payments for the requested reference and compute aging.
+        $reference_type = (string) $request->get_param('reference_type');
+        $reference_id = (int) $request->get_param('reference_id');
+        $rows = MGWS_Payments::list($reference_type, $reference_id);
+        $now = (string) $request->get_param('now_gmt');
+        $aging = MGWS_Payments::aging(is_array($rows) ? $rows : array(), $now !== '' ? $now : null);
+        return rest_ensure_response($aging);
+    }
+
+    public function route_kits_list(WP_REST_Request $request) {
+        $active = $request->get_param('active');
+        $active = $active === null ? null : (bool) $active;
+        $rows = MGWS_Kits::list($active);
+        return rest_ensure_response(is_array($rows) ? $rows : array());
+    }
+
+    public function route_kits_create(WP_REST_Request $request) {
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $result = MGWS_Kits::create(
+            (string) ($body['name'] ?? ''),
+            (int) ($body['product_id'] ?? 0),
+            (int) ($body['variation_id'] ?? 0),
+            (string) ($body['sku'] ?? ''),
+            isset($body['note']) ? (string) $body['note'] : '',
+            (int) get_current_user_id()
+        );
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response($result);
+    }
+
+    public function route_kit_get(WP_REST_Request $request) {
+        $id = (int) $request->get_param('kit_id');
+        $row = MGWS_Kits::get($id);
+        if (!is_array($row)) {
+            return new WP_Error('mgws_not_found', 'Kit not found', array('status' => 404));
+        }
+        return rest_ensure_response($row);
+    }
+
+    public function route_kit_component_add(WP_REST_Request $request) {
+        $kit_id = (int) $request->get_param('kit_id');
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $result = MGWS_Kits::add_component(
+            $kit_id,
+            (int) ($body['product_id'] ?? 0),
+            (int) ($body['variation_id'] ?? 0),
+            (int) ($body['qty'] ?? 1)
+        );
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response($result);
+    }
+
+    public function route_kit_component_delete(WP_REST_Request $request) {
+        $id = (int) $request->get_param('component_id');
+        $result = MGWS_Kits::remove_component($id);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response($result);
+    }
+
+    public function route_kit_delete(WP_REST_Request $request) {
+        $id = (int) $request->get_param('kit_id');
+        $result = MGWS_Kits::delete($id);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response(array('ok' => true));
+    }
+
+    public function route_kit_availability(WP_REST_Request $request) {
+        $product_id = (int) $request->get_param('product_id');
+        $variation_id = (int) $request->get_param('variation_id');
+        $qty = (int) ($request->get_param('qty') ?: 1);
+        if ($product_id <= 0) {
+            return new WP_Error('mgws_bad_request', 'product_id required', array('status' => 400));
+        }
+        $sites = MGWS_Kits::site_availability($product_id, $variation_id, $qty);
+        return rest_ensure_response(array(
+            'product_id' => $product_id,
+            'variation_id' => $variation_id,
+            'qty' => $qty,
+            'sites' => $sites,
+        ));
+    }
+
+    /**
+     * Shared checks for the kit deduct/restore routes: the site must be one the
+     * user may work on, and a ref_order_id must name a real order the user may
+     * accept. Movements carry that id, and MGWS_Order_Stock::already_taken()
+     * reads it: a free-form id would mark someone else's order as taken.
+     */
+    private function kit_request_guard($site_id, $ref_order_id) {
+        $site_limit = $this->get_user_site_limit(get_current_user_id());
+        if ($site_limit > 0 && (int) $site_id !== (int) $site_limit) {
+            return new WP_Error('mgws_forbidden', 'Site outside allowed site', array('status' => 403));
+        }
+        if ((int) $ref_order_id > 0) {
+            if (!current_user_can('mgws_order_accept') && !current_user_can('manage_options')) {
+                return new WP_Error('mgws_forbidden', 'Linking a kit movement to an order requires mgws_order_accept', array('status' => 403));
+            }
+            if (!function_exists('wc_get_order') || !wc_get_order((int) $ref_order_id)) {
+                return new WP_Error('mgws_not_found', 'Order not found', array('status' => 404));
+            }
+        }
+        return true;
+    }
+
+    public function route_kit_deduct(WP_REST_Request $request) {
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $site_id = (int) ($body['site_id'] ?? 0);
+        $product_id = (int) ($body['product_id'] ?? 0);
+        $variation_id = (int) ($body['variation_id'] ?? 0);
+        $kit_qty = (int) ($body['qty'] ?? 1);
+        $ref_order_id = (int) ($body['ref_order_id'] ?? 0);
+        if ($site_id <= 0 || $product_id <= 0) {
+            return new WP_Error('mgws_bad_request', 'site_id and product_id required', array('status' => 400));
+        }
+        $guard = $this->kit_request_guard($site_id, $ref_order_id);
+        if (is_wp_error($guard)) {
+            return $guard;
+        }
+        $result = MGWS_Kits::deduct_from_site(
+            $site_id,
+            $product_id,
+            $variation_id,
+            $kit_qty,
+            $ref_order_id,
+            (int) get_current_user_id()
+        );
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        if (empty($result['ok'])) {
+            return new WP_Error('mgws_conflict', (string) ($result['message'] ?? 'Deduction failed'), array('status' => 409));
+        }
+        return rest_ensure_response($result);
+    }
+
+    public function route_kit_restore(WP_REST_Request $request) {
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $site_id = (int) ($body['site_id'] ?? 0);
+        $product_id = (int) ($body['product_id'] ?? 0);
+        $variation_id = (int) ($body['variation_id'] ?? 0);
+        $kit_qty = (int) ($body['qty'] ?? 1);
+        $ref_order_id = (int) ($body['ref_order_id'] ?? 0);
+        if ($site_id <= 0 || $product_id <= 0) {
+            return new WP_Error('mgws_bad_request', 'site_id and product_id required', array('status' => 400));
+        }
+        $guard = $this->kit_request_guard($site_id, $ref_order_id);
+        if (is_wp_error($guard)) {
+            return $guard;
+        }
+        $result = MGWS_Kits::restore_to_site(
+            $site_id,
+            $product_id,
+            $variation_id,
+            $kit_qty,
+            $ref_order_id,
+            (int) get_current_user_id()
+        );
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        if (empty($result['ok'])) {
+            return new WP_Error('mgws_conflict', (string) ($result['message'] ?? 'Restore failed'), array('status' => 409));
+        }
+        return rest_ensure_response($result);
+    }
+
+    public function route_documents_list(WP_REST_Request $request) {
+        $document_type = (string) $request->get_param('document_type');
+        $reference_type = (string) $request->get_param('reference_type');
+        $reference_id = (int) $request->get_param('reference_id');
+        $status = (string) $request->get_param('status');
+        $rows = MGWS_Documents::list($document_type, $reference_type, $reference_id, $status);
+        return rest_ensure_response(is_array($rows) ? $rows : array());
+    }
+
+    public function route_documents_create(WP_REST_Request $request) {
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $result = MGWS_Documents::create(
+            (string) ($body['document_type'] ?? ''),
+            (string) ($body['document_number'] ?? ''),
+            (string) ($body['reference_type'] ?? ''),
+            (int) ($body['reference_id'] ?? 0),
+            isset($body['note']) ? (string) $body['note'] : '',
+            (int) get_current_user_id()
+        );
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response($result);
+    }
+
+    public function route_document_get(WP_REST_Request $request) {
+        $id = (int) $request->get_param('document_id');
+        $row = MGWS_Documents::get($id);
+        if (!is_array($row)) {
+            return new WP_Error('mgws_not_found', 'Document not found', array('status' => 404));
+        }
+        return rest_ensure_response($row);
+    }
+
+    public function route_document_status(WP_REST_Request $request) {
+        $id = (int) $request->get_param('document_id');
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $result = MGWS_Documents::update_status(
+            $id,
+            (string) ($body['status'] ?? ''),
+            isset($body['issued_at_gmt']) ? (string) $body['issued_at_gmt'] : null,
+            isset($body['pdf_path']) ? (string) $body['pdf_path'] : null
+        );
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response($result);
+    }
+
+    public function route_document_delete(WP_REST_Request $request) {
+        $id = (int) $request->get_param('document_id');
+        $result = MGWS_Documents::delete($id);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response(array('ok' => true));
+    }
+
+    public function route_product_barcode_upsert(WP_REST_Request $request) {
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $result = MGWS_Product_Barcodes::upsert(
+            (int) ($body['product_id'] ?? 0),
+            (int) ($body['variation_id'] ?? 0),
+            (string) ($body['barcode'] ?? ''),
+            (string) ($body['barcode_type'] ?? 'ean13'),
+            (int) get_current_user_id()
+        );
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response($result);
+    }
+
+    public function route_product_barcode_get(WP_REST_Request $request) {
+        $product_id = (int) $request->get_param('product_id');
+        $variation_id = (int) $request->get_param('variation_id');
+        $row = MGWS_Product_Barcodes::get($product_id, $variation_id);
+        if (!is_array($row)) {
+            return new WP_Error('mgws_not_found', 'Barcode not found', array('status' => 404));
+        }
+        return rest_ensure_response($row);
+    }
+
+    public function route_product_barcode_delete(WP_REST_Request $request) {
+        $product_id = (int) $request->get_param('product_id');
+        $variation_id = (int) $request->get_param('variation_id');
+        $result = MGWS_Product_Barcodes::delete($product_id, $variation_id);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response(array('ok' => true));
+    }
+
+    public function route_purchase_order_send(WP_REST_Request $request) {
+        $po_id = (int) $request->get_param('purchase_order_id');
+        $po = MGWS_DB::get_purchase_order($po_id);
+        if (!is_array($po)) {
+            return new WP_Error('mgws_not_found', 'Purchase order not found', array('status' => 404));
+        }
+        $supplier = MGWS_DB::get_supplier((int) ($po['supplier_id'] ?? 0));
+        $supplier_email = is_array($supplier) ? (string) ($supplier['email'] ?? '') : '';
+
+        // Create a document record for this send.
+        $doc = MGWS_Documents::create('purchase_order', (string) ($po['document_number'] ?? ''), 'purchase_order', $po_id, '', (int) get_current_user_id());
+        if (is_wp_error($doc)) {
+            return $doc;
+        }
+        $updated = MGWS_Documents::update_status((int) $doc['id'], 'sent', gmdate('Y-m-d H:i:s'), '');
+        if (is_wp_error($updated)) {
+            $updated = $doc;
+        }
+
+        // No automatic email: the PDF and the dispatch are handled by the caller
+        // (the app prints the "Ordine fornitore" template and sends it). The
+        // plugin only records that the order has been sent.
+
+        return rest_ensure_response(array(
+            'ok' => true,
+            'document' => $updated,
+            'emailed' => false,
+            'pdf' => 'pending',
+        ));
+    }
+
+    public function route_count_schedules_list(WP_REST_Request $request) {
+        $active = $request->get_param('active');
+        $active = $active === null ? null : (bool) $active;
+        $rows = MGWS_Count_Schedules::list($active);
+        return rest_ensure_response(is_array($rows) ? $rows : array());
+    }
+
+    public function route_count_schedules_create(WP_REST_Request $request) {
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $result = MGWS_Count_Schedules::create(
+            (int) ($body['site_id'] ?? 0),
+            (int) ($body['warehouse_id'] ?? 0),
+            (int) ($body['frequency_days'] ?? 30),
+            (int) get_current_user_id()
+        );
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response($result);
+    }
+
+    public function route_count_schedule_update(WP_REST_Request $request) {
+        $id = (int) $request->get_param('schedule_id');
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $result = MGWS_Count_Schedules::update(
+            $id,
+            (int) ($body['frequency_days'] ?? 30),
+            (bool) ($body['active'] ?? true)
+        );
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response($result);
+    }
+
+    public function route_count_schedule_delete(WP_REST_Request $request) {
+        $id = (int) $request->get_param('schedule_id');
+        $result = MGWS_Count_Schedules::delete($id);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response(array('ok' => true));
+    }
+
+    public function route_count_schedules_run_due(WP_REST_Request $request) {
+        $result = MGWS_Count_Schedules::run_due((int) get_current_user_id());
+        return rest_ensure_response(array(
+            'ok' => true,
+            'advanced' => (int) ($result['advanced'] ?? 0),
+            'sessions' => isset($result['sessions']) && is_array($result['sessions']) ? $result['sessions'] : array(),
+            'failed' => isset($result['failed']) && is_array($result['failed']) ? $result['failed'] : array(),
+        ));
     }
 
     public function route_inventory_rfid_scan(WP_REST_Request $request) {
@@ -4346,6 +6816,12 @@ class MGWS_REST_API {
         }
 
         $note = $audit_note . ': total ' . (int) $previous_stock . ' -> ' . (int) $target_stock . ' (delta ' . (int) $delta . ')';
+        // Una rettifica non porta un costo proprio: si muove al costo medio
+        // corrente, e la riga registra il valore effettivamente spostato.
+        $adjust_value_delta = $updated['value_delta_cents'] ?? null;
+        $adjust_unit_cost = $adjust_value_delta === null || (int) $delta === 0
+            ? null
+            : MGWS_Cost_Plan::average_cents(abs((int) $adjust_value_delta), abs((int) $delta));
         // Stock prima e dopo vanno in colonne, non solo nella nota: sono il dato
         // che serve a un contromovimento per sapere a cosa tornare, e rileggerlo
         // da una stringa che qualcuno puo' riscrivere e' mettere in piedi una
@@ -4371,6 +6847,8 @@ class MGWS_REST_API {
                 'stock_after' => (int) $target_stock,
                 'stock_effect' => 'adjust',
                 'reason_code' => 'reconcile',
+                'unit_cost_cents' => $adjust_unit_cost,
+                'value_delta_cents' => $adjust_value_delta,
             )
         );
         if (!$written) {
@@ -4632,8 +7110,8 @@ class MGWS_REST_API {
                 return new WP_Error('mgws_conflict', (string) ($res['message'] ?? 'Error'), array('status' => 409));
             }
             $delta = (int) $qty - $old_qty;
-            MGWS_DB::insert_move('adjust', (int) $wh_site, $warehouse_id, $product_id, $variation_id, $delta, $room, $rack, $shelf, $user_id, 0, 'API adjust');
-            $this->sync_woo_stock($product_id, $variation_id);
+            MGWS_DB::insert_move('adjust', (int) $wh_site, $warehouse_id, $product_id, $variation_id, $delta, $room, $rack, $shelf, $user_id, 0, 'API adjust', 0, 0, array('value_delta_cents' => $res['value_delta_cents'] ?? null));
+            MGWS_Woo_Stock::commit_delta((int) $product_id, (int) $variation_id, $delta);
             return rest_ensure_response(array('ok' => true, 'message' => 'Updated'));
         }
 
@@ -4645,8 +7123,8 @@ class MGWS_REST_API {
             if (!$res['ok']) {
                 return new WP_Error('mgws_conflict', (string) ($res['message'] ?? 'Error'), array('status' => 409));
             }
-            MGWS_DB::insert_move('in', (int) $wh_site, $warehouse_id, $product_id, $variation_id, $qty, $room, $rack, $shelf, $user_id, 0, 'API in');
-            $this->sync_woo_stock($product_id, $variation_id);
+            MGWS_DB::insert_move('in', (int) $wh_site, $warehouse_id, $product_id, $variation_id, $qty, $room, $rack, $shelf, $user_id, 0, 'API in', 0, 0, array('value_delta_cents' => $res['value_delta_cents'] ?? null));
+            MGWS_Woo_Stock::commit_delta((int) $product_id, (int) $variation_id, $qty);
             return rest_ensure_response(array('ok' => true, 'message' => 'In registered'));
         }
 
@@ -4658,8 +7136,8 @@ class MGWS_REST_API {
             if (!$res['ok']) {
                 return new WP_Error('mgws_conflict', (string) ($res['message'] ?? 'Error'), array('status' => 409));
             }
-            MGWS_DB::insert_move('out', (int) $wh_site, $warehouse_id, $product_id, $variation_id, $qty, $room, $rack, $shelf, $user_id, 0, 'API out');
-            $this->sync_woo_stock($product_id, $variation_id);
+            MGWS_DB::insert_move('out', (int) $wh_site, $warehouse_id, $product_id, $variation_id, $qty, $room, $rack, $shelf, $user_id, 0, 'API out', 0, 0, array('value_delta_cents' => $res['value_delta_cents'] ?? null));
+            MGWS_Woo_Stock::commit_delta((int) $product_id, (int) $variation_id, -$qty);
             return rest_ensure_response(array('ok' => true, 'message' => 'Out registered'));
         }
 
@@ -4688,17 +7166,22 @@ class MGWS_REST_API {
                 $wpdb->query('ROLLBACK');
                 return new WP_Error('mgws_conflict', (string) ($from_res['message'] ?? 'Error'), array('status' => 409));
             }
-            $to_res = MGWS_DB::apply_delta_level($to_warehouse_id, $product_id, $variation_id, $qty, $to_room, $to_rack, $to_shelf);
+            $legacy_transfer_delta = $from_res['value_delta_cents'] ?? null;
+            $legacy_transfer_cost = $legacy_transfer_delta === null
+                ? null
+                : MGWS_Cost_Plan::average_cents(abs((int) $legacy_transfer_delta), $qty);
+            $to_res = MGWS_DB::apply_delta_level($to_warehouse_id, $product_id, $variation_id, $qty, $to_room, $to_rack, $to_shelf, $legacy_transfer_cost);
             if (!$to_res['ok']) {
                 $wpdb->query('ROLLBACK');
                 return new WP_Error('mgws_conflict', (string) ($to_res['message'] ?? 'Error'), array('status' => 409));
             }
 
-            MGWS_DB::insert_move('out', (int) $wh_site, $warehouse_id, $product_id, $variation_id, $qty, $room, $rack, $shelf, $user_id, 0, 'API transfer out', $warehouse_id, $to_warehouse_id);
-            MGWS_DB::insert_move('in', (int) $to_site, $to_warehouse_id, $product_id, $variation_id, $qty, $to_room, $to_rack, $to_shelf, $user_id, 0, 'API transfer in', $warehouse_id, $to_warehouse_id);
+            MGWS_DB::insert_move('out', (int) $wh_site, $warehouse_id, $product_id, $variation_id, $qty, $room, $rack, $shelf, $user_id, 0, 'API transfer out', $warehouse_id, $to_warehouse_id, array('unit_cost_cents' => $legacy_transfer_cost, 'value_delta_cents' => $legacy_transfer_delta));
+            MGWS_DB::insert_move('in', (int) $to_site, $to_warehouse_id, $product_id, $variation_id, $qty, $to_room, $to_rack, $to_shelf, $user_id, 0, 'API transfer in', $warehouse_id, $to_warehouse_id, array('unit_cost_cents' => $legacy_transfer_cost, 'value_delta_cents' => $to_res['value_delta_cents'] ?? null));
             $wpdb->query('COMMIT');
 
-            $this->sync_woo_stock($product_id, $variation_id);
+            // A transfer only moves the quantity between warehouses, so the
+            // WooCommerce total stays the same and nothing is written there.
             return rest_ensure_response(array('ok' => true, 'message' => 'Transfer registered'));
         }
 
@@ -4719,8 +7202,7 @@ class MGWS_REST_API {
             return new WP_Error('mgws_not_found', 'Order not found', array('status' => 404));
         }
 
-        $already = (int) get_post_meta($order_id, '_mgws_accept_committed', true);
-        if ($already === 1) {
+        if (MGWS_Order_Stock::is_accepted($order)) {
             return new WP_Error('mgws_conflict', 'Order already accepted', array('status' => 409));
         }
 
@@ -4745,7 +7227,6 @@ class MGWS_REST_API {
 
         $allocations = array();
         $allocated_by_card = array();
-        $touched_items = array();
         $site_limit = $this->get_user_site_limit(get_current_user_id());
 
         foreach ($cards_in as $card) {
@@ -4761,8 +7242,6 @@ class MGWS_REST_API {
             if (!isset($required_map[$card_key])) {
                 return new WP_Error('mgws_bad_request', 'Card not present in order: ' . $card_key, array('status' => 400));
             }
-            $touched_items[$card_key] = array('product_id' => $pid, 'variation_id' => $vid);
-
             $allocs = is_array($card['allocations'] ?? null) ? $card['allocations'] : array();
             foreach ($allocs as $a) {
                 if (!is_array($a)) {
@@ -4835,14 +7314,72 @@ class MGWS_REST_API {
         });
 
         $user_id = get_current_user_id();
-        $result = MGWS_DB::commit_order_accept($order_id, $user_id, $allocations);
-        if (!$result['ok']) {
-            return new WP_Error('mgws_conflict', (string) ($result['message'] ?? 'Error'), array('status' => 409));
+        // Se il ledger ha gia' i movimenti di questo ordine (allocazione al
+        // pagamento), l'accettazione e' una conferma: riscrivere i movimenti
+        // scaricherebbe gli stessi pezzi due volte. Lo stato si legge dai
+        // movimenti, non da un flag scritto sull'ordine del sito.
+        // When the ledger already holds this order's movements (allocation at
+        // payment), acceptance is a confirmation: writing the movements again
+        // would take the same pieces twice. The state is read from the
+        // movements, not from a flag written on the storefront order.
+        $stock_posted = MGWS_Order_Stock::already_taken($order_id);
+        if (!$stock_posted) {
+            $result = MGWS_DB::commit_order_accept($order_id, $user_id, $allocations);
+            if (!$result['ok']) {
+                return new WP_Error('mgws_conflict', (string) ($result['message'] ?? 'Error'), array('status' => 409));
+            }
         }
 
-        foreach ($touched_items as $it) {
-            $this->sync_woo_stock((int) $it['product_id'], (int) $it['variation_id']);
+        // Kit expansion: when a sold line is a kit, also take the component
+        // stock from the same physical site the operator chose for the kit.
+        // The operator's site choice (in $allocations) drives the deduction:
+        // no automatic fallback to other sites.
+        $kit_sites_by_product = array();
+        $kit_issues = array();
+        foreach ($allocations as $a) {
+            $pid = (int) ($a['product_id'] ?? 0);
+            $vid = (int) ($a['variation_id'] ?? 0);
+            $sid = (int) ($a['site_id'] ?? 0);
+            if ($pid <= 0 || $sid <= 0) {
+                continue;
+            }
+            if (!MGWS_Kits::find_for_product($pid, $vid)) {
+                continue;
+            }
+            $kit_sites_by_product[$pid . ':' . $vid][$sid] = ($kit_sites_by_product[$pid . ':' . $vid][$sid] ?? 0) + (int) ($a['use_qty'] ?? 0);
         }
+        foreach ($kit_sites_by_product as $key => $site_qty_map) {
+            list($pid, $vid) = array_map('intval', explode(':', $key));
+            foreach ($site_qty_map as $sid => $kqty) {
+                if ($kqty <= 0) {
+                    continue;
+                }
+                $kit_result = MGWS_Kits::deduct_from_site(
+                    (int) $sid,
+                    $pid,
+                    $vid,
+                    $kqty,
+                    $order_id,
+                    (int) $user_id
+                );
+                // A short or failed component deduction must reach the operator,
+                // not vanish: the kit is accepted, its components may not be.
+                if (empty($kit_result['ok']) || (int) ($kit_result['shortfall'] ?? 0) > 0 || !empty($kit_result['woo_errors'])) {
+                    $kit_issues[] = array(
+                        'product_id' => $pid,
+                        'variation_id' => $vid,
+                        'site_id' => (int) $sid,
+                        'ok' => !empty($kit_result['ok']),
+                        'shortfall' => (int) ($kit_result['shortfall'] ?? 0),
+                        'message' => (string) ($kit_result['message'] ?? ''),
+                        'woo_errors' => (array) ($kit_result['woo_errors'] ?? array()),
+                    );
+                }
+            }
+        }
+
+        // WooCommerce owns the total: the order already exists in Woo and Woo
+        // has already reduced the stock for it.
 
         $allocation_audit = array(
             'order_id' => $order_id,
@@ -4866,10 +7403,11 @@ class MGWS_REST_API {
             $allocation_audit['totals']['total_remaining'] += $remaining;
         }
 
-        update_post_meta($order_id, '_mgws_accept_committed', 1);
-        update_post_meta($order_id, '_mgws_accept_committed_at_gmt', gmdate('Y-m-d H:i:s'));
-        update_post_meta($order_id, '_mgws_accept_committed_by', $user_id);
-        update_post_meta($order_id, '_mgws_allocation_v1', wp_json_encode($allocation_audit));
+        $order->update_meta_data('_mgws_accept_committed', 1);
+        $order->update_meta_data('_mgws_accept_committed_at_gmt', gmdate('Y-m-d H:i:s'));
+        $order->update_meta_data('_mgws_accept_committed_by', $user_id);
+        $order->update_meta_data('_mgws_allocation_v1', wp_json_encode($allocation_audit));
+        $order->save();
 
         $note = __('Order accepted (API).', 'mg-warehouse-stock');
         if ($allocation_audit['totals']['total_remaining'] > 0) {
@@ -4879,10 +7417,17 @@ class MGWS_REST_API {
                 (int) $allocation_audit['totals']['total_remaining']
             );
         }
+        if (!empty($kit_issues)) {
+            $note .= ' ' . sprintf(
+                /* translators: %d: number of kit lines whose components were not fully deducted. */
+                __('Warning: %d kit lines could not deduct all their components.', 'mg-warehouse-stock'),
+                count($kit_issues)
+            );
+        }
         $order->add_order_note($note, false, true);
         $order->update_status('mg-accepted');
 
-        return rest_ensure_response(array('ok' => true, 'message' => 'Order accepted', 'totals' => $allocation_audit['totals']));
+        return rest_ensure_response(array('ok' => true, 'message' => 'Order accepted', 'totals' => $allocation_audit['totals'], 'kit_issues' => $kit_issues));
     }
 
     public function route_pos_checkout(WP_REST_Request $request) {
@@ -5020,10 +7565,10 @@ class MGWS_REST_API {
         }
 
         $order_id = (int) $order->get_id();
-        $touched_items = $checkout_plan['touched_items'];
         $movement_plan = $checkout_plan['movement_plan'];
         $sale_audit = $checkout_plan['sale_audit'];
         $return_audit = $checkout_plan['return_audit'];
+        $committed = false;
 
         try {
             $order->set_created_via('mgws-pos');
@@ -5090,16 +7635,53 @@ class MGWS_REST_API {
             global $wpdb;
             $wpdb->query('START TRANSACTION');
 
+            // Costo della merce delle righe scontrino, accumulato mentre i
+            // movimenti vengono scritti: e' l'unico momento in cui il valore
+            // delle allocazioni e' leggibile. In uscita il delta di valore e'
+            // negativo e il costo e' positivo; in rientro e' il contrario, cosi'
+            // la riga di reso porta ricavo e costo entrambi negativi.
+            // Line cost, accumulated while the movements are written: the only
+            // moment the allocation values are readable.
+            $pos_sale_cost_totals = array();
+            $pos_sale_cost_unknown = array();
+            $pos_return_cost_totals = array();
+            $pos_return_cost_unknown = array();
+
             foreach ($movement_plan as $step) {
                 if ($step['kind'] === 'sale') {
+                    $pos_cost_key = (int) $step['product_id'] . ':' . (int) $step['variation_id'];
+                    if (!isset($pos_sale_cost_totals[$pos_cost_key])) {
+                        $pos_sale_cost_totals[$pos_cost_key] = 0;
+                    }
                     foreach ($step['allocations'] as $allocation) {
+                        // Il valore scende con la quantita', al costo medio del
+                        // livello: e' la stessa formula di `apply_delta_level()`,
+                        // scritta qui perche' la vendita POS aggiorna il livello
+                        // con una UPDATE diretta che filtra anche per sede.
+                        $pos_level_before = MGWS_DB::get_level_row((int) $allocation['warehouse_id'], (int) $step['product_id'], (int) $step['variation_id'], (string) $allocation['room'], (string) $allocation['rack'], (string) $allocation['shelf']);
+                        $pos_old_qty = (int) ($pos_level_before['qty'] ?? 0);
+                        $pos_old_value = $pos_level_before !== null && $pos_level_before['stock_value_cents'] !== null ? (int) $pos_level_before['stock_value_cents'] : null;
+                        $pos_new_value = MGWS_Cost_Plan::value_after_delta($pos_old_value, $pos_old_qty, -(int) $allocation['use_qty']);
+                        $pos_value_delta = ($pos_old_value !== null && $pos_new_value !== null) ? $pos_new_value - $pos_old_value : null;
+                        $pos_unit_cost = MGWS_Cost_Plan::average_cents($pos_old_value, $pos_old_qty);
+                        if ($pos_value_delta === null) {
+                            $pos_sale_cost_unknown[$pos_cost_key] = true;
+                        } else {
+                            $pos_sale_cost_totals[$pos_cost_key] += -$pos_value_delta;
+                        }
                         $updated = $wpdb->query($wpdb->prepare(
                             'UPDATE %i
-                             SET qty = qty - %d, updated_at_gmt = %s
+                             SET stock_value_cents = CASE
+                                    WHEN stock_value_cents IS NULL THEN NULL
+                                    WHEN qty = 0 THEN NULL
+                                    ELSE GREATEST(0, stock_value_cents + ROUND(stock_value_cents / qty) * %d)
+                                 END,
+                                 qty = qty - %d, updated_at_gmt = %s
                              WHERE site_id = %d AND warehouse_id = %d AND product_id = %d AND variation_id = %d
                                AND room = %s AND rack = %s AND shelf = %s
                                AND qty >= %d',
                             MGWS_DB::table_levels(),
+                            -(int) $allocation['use_qty'],
                             (int) $allocation['use_qty'],
                             gmdate('Y-m-d H:i:s'),
                             (int) $allocation['site_id'],
@@ -5116,7 +7698,7 @@ class MGWS_REST_API {
                             throw new Exception(__('Stock ran out or changed during checkout', 'mg-warehouse-stock'));
                         }
 
-                        if (!MGWS_DB::insert_move('out', (int) $allocation['site_id'], (int) $allocation['warehouse_id'], (int) $step['product_id'], (int) $step['variation_id'], (int) $allocation['use_qty'], (string) $allocation['room'], (string) $allocation['rack'], (string) $allocation['shelf'], get_current_user_id(), $order_id, 'POS checkout', (int) $allocation['warehouse_id'], 0)) {
+                        if (!MGWS_DB::insert_move('out', (int) $allocation['site_id'], (int) $allocation['warehouse_id'], (int) $step['product_id'], (int) $step['variation_id'], (int) $allocation['use_qty'], (string) $allocation['room'], (string) $allocation['rack'], (string) $allocation['shelf'], get_current_user_id(), $order_id, 'POS checkout', (int) $allocation['warehouse_id'], 0, array('unit_cost_cents' => $pos_unit_cost, 'value_delta_cents' => $pos_value_delta))) {
                             $wpdb->query('ROLLBACK');
                             throw new Exception(__('Could not record the outgoing movement', 'mg-warehouse-stock'));
                         }
@@ -5128,7 +7710,20 @@ class MGWS_REST_API {
                 $delta = (int) $step['qty'];
                 $delta_result = MGWS_DB::apply_delta_level((int) $location['warehouse_id'], (int) $step['product_id'], (int) $step['variation_id'], $delta, (string) $location['room'], (string) $location['rack'], (string) $location['shelf']);
                 if (is_array($delta_result) && !empty($delta_result['ok'])) {
-                    if (!MGWS_DB::insert_move('in', (int) $location['site_id'], (int) $location['warehouse_id'], (int) $step['product_id'], (int) $step['variation_id'], $delta, (string) $location['room'], (string) $location['rack'], (string) $location['shelf'], get_current_user_id(), $order_id, 'POS return', 0, (int) $location['warehouse_id'])) {
+                    $pos_return_value_delta = $delta_result['value_delta_cents'] ?? null;
+                    $pos_cost_key = (int) $step['product_id'] . ':' . (int) $step['variation_id'];
+                    if (!isset($pos_return_cost_totals[$pos_cost_key])) {
+                        $pos_return_cost_totals[$pos_cost_key] = 0;
+                    }
+                    if ($pos_return_value_delta === null) {
+                        $pos_return_cost_unknown[$pos_cost_key] = true;
+                    } else {
+                        $pos_return_cost_totals[$pos_cost_key] += -$pos_return_value_delta;
+                    }
+                    $pos_return_unit_cost = $pos_return_value_delta === null || $delta === 0
+                        ? null
+                        : MGWS_Cost_Plan::average_cents(abs((int) $pos_return_value_delta), abs($delta));
+                    if (!MGWS_DB::insert_move('in', (int) $location['site_id'], (int) $location['warehouse_id'], (int) $step['product_id'], (int) $step['variation_id'], $delta, (string) $location['room'], (string) $location['rack'], (string) $location['shelf'], get_current_user_id(), $order_id, 'POS return', 0, (int) $location['warehouse_id'], array('unit_cost_cents' => $pos_return_unit_cost, 'value_delta_cents' => $pos_return_value_delta))) {
                         $wpdb->query('ROLLBACK');
                         throw new Exception(__('Could not record the incoming movement', 'mg-warehouse-stock'));
                     }
@@ -5139,11 +7734,72 @@ class MGWS_REST_API {
                 throw new Exception((string) ($delta_result['message'] ?? __('Could not record the return', 'mg-warehouse-stock')));
             }
 
-            $wpdb->query('COMMIT');
-
-            foreach ($touched_items as $it) {
-                $this->sync_woo_stock((int) $it['product_id'], (int) $it['variation_id']);
+            // Kit expansion for POS: when a sold line is a kit, also take the
+            // component stock from the same physical site. The POS writes both
+            // sides in this same transaction, so the components are deducted
+            // here alongside the kit product, with no fallback to other sites.
+            $pos_kit_allocations = array();
+            foreach ($movement_plan as $step) {
+                if (($step['kind'] ?? '') !== 'sale') {
+                    continue;
+                }
+                $kit = class_exists('MGWS_Kits') ? MGWS_Kits::find_for_product((int) $step['product_id'], (int) $step['variation_id']) : null;
+                if (!is_array($kit)) {
+                    continue;
+                }
+                $site_id = 0;
+                foreach (($step['allocations'] ?? array()) as $alloc) {
+                    if ((int) ($alloc['site_id'] ?? 0) > 0) {
+                        $site_id = (int) $alloc['site_id'];
+                        break;
+                    }
+                }
+                if ($site_id <= 0) {
+                    $site_id = (int) $site_limit;
+                }
+                if ($site_id <= 0) {
+                    continue;
+                }
+                $built = MGWS_Kits::build_component_allocations($site_id, (int) $step['product_id'], (int) $step['variation_id'], (int) $step['qty']);
+                foreach (($built['allocations'] ?? array()) as $allocation) {
+                    $updated = $wpdb->query($wpdb->prepare(
+                        'UPDATE %i
+                         SET qty = qty - %d, updated_at_gmt = %s
+                         WHERE site_id = %d AND warehouse_id = %d AND product_id = %d AND variation_id = %d
+                           AND room = %s AND rack = %s AND shelf = %s
+                           AND qty >= %d',
+                        MGWS_DB::table_levels(),
+                        (int) $allocation['use_qty'],
+                        gmdate('Y-m-d H:i:s'),
+                        (int) $allocation['site_id'],
+                        (int) $allocation['warehouse_id'],
+                        (int) $allocation['product_id'],
+                        (int) $allocation['variation_id'],
+                        (string) $allocation['room'],
+                        (string) $allocation['rack'],
+                        (string) $allocation['shelf'],
+                        (int) $allocation['use_qty']
+                    ));
+                    if ((int) $updated !== 1) {
+                        $wpdb->query('ROLLBACK');
+                        throw new Exception(__('Stock ran out or changed during checkout', 'mg-warehouse-stock'));
+                    }
+                    if (!MGWS_DB::insert_move('out', (int) $allocation['site_id'], (int) $allocation['warehouse_id'], (int) $allocation['product_id'], (int) $allocation['variation_id'], (int) $allocation['use_qty'], (string) $allocation['room'], (string) $allocation['rack'], (string) $allocation['shelf'], get_current_user_id(), $order_id, 'POS kit expansion', (int) $allocation['warehouse_id'], 0, array())) {
+                        $wpdb->query('ROLLBACK');
+                        throw new Exception(__('Could not record the outgoing movement', 'mg-warehouse-stock'));
+                    }
+                    $pos_kit_allocations[] = $allocation;
+                }
             }
+
+            // La transazione resta aperta: scontrino e righe sono parte della
+            // stessa vendita. Se lo scontrino non si scrive, il ROLLBACK
+            // riporta indietro anche i movimenti, invece di lasciare merce
+            // scaricata senza documento.
+            // The transaction stays open: the receipt and its lines are part of
+            // the same sale. If the receipt cannot be written, the ROLLBACK
+            // takes the movements back too, instead of leaving stock gone
+            // without a document.
 
             $audit = array(
                 'order_id' => $order_id,
@@ -5165,10 +7821,15 @@ class MGWS_REST_API {
                 $audit['totals']['total_return'] += (float) ($item['subtotal'] ?? 0);
             }
 
-            update_post_meta($order_id, '_mgws_pos_order_audit', wp_json_encode($audit));
-            update_post_meta($order_id, '_mgws_pos_checkout_success', 1);
-            update_post_meta($order_id, '_mgws_pos_checkout_at_gmt', gmdate('Y-m-d H:i:s'));
-            update_post_meta($order_id, '_mgws_pos_checkout_by', get_current_user_id());
+            // I metadati passano dall'ordine, non da `update_post_meta()`:
+            // con HPOS l'ordine non e' un post e i due archivi sono diversi.
+            // Order meta goes through the order object, not `update_post_meta()`:
+            // with HPOS the order is not a post and the two stores differ.
+            $order->update_meta_data('_mgws_pos_order_audit', wp_json_encode($audit));
+            $order->update_meta_data('_mgws_pos_checkout_success', 1);
+            $order->update_meta_data('_mgws_pos_checkout_at_gmt', gmdate('Y-m-d H:i:s'));
+            $order->update_meta_data('_mgws_pos_checkout_by', get_current_user_id());
+            $order->save();
 
             if ($order_status !== '') {
                 $order->update_status($order_status);
@@ -5220,7 +7881,13 @@ class MGWS_REST_API {
                 'sales_total' => (float) ($totals['totale_vendite'] ?? 0),
                 'returns_total' => (float) ($totals['totale_resi'] ?? 0),
                 'net_total' => (float) ($totals['saldo_operazione'] ?? 0),
-                'received_amount' => (float) ($totals['resto'] ?? 0),
+                // `importo_ricevuto` arriva dalle app 2.14.1+; prima il campo
+                // era il resto, quindi si ricostruisce da totale + resto.
+                // Apps before 2.14.1 do not send `importo_ricevuto`: rebuild
+                // it from total + change.
+                'received_amount' => isset($totals['importo_ricevuto'])
+                    ? (float) $totals['importo_ricevuto']
+                    : ((float) ($totals['resto'] ?? 0) > 0 ? (float) ($totals['totale'] ?? 0) + (float) $totals['resto'] : 0.0),
                 'change_amount' => (float) ($totals['resto'] ?? 0),
                 'customer_id' => $order->get_customer_id() > 0 ? (int) $order->get_customer_id() : 0,
                 'customer_name' => trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name()),
@@ -5243,6 +7910,8 @@ class MGWS_REST_API {
             }
             $receipt_id = (int) ($receipt_row['id'] ?? 0);
             if ($receipt_id > 0) {
+                $sale_items = $this->apply_pos_line_costs($sale_items, $pos_sale_cost_totals, $pos_sale_cost_unknown);
+                $return_items = $this->apply_pos_line_costs($return_items, $pos_return_cost_totals, $pos_return_cost_unknown);
                 $receipt_lines = array_merge($sale_items, $return_items);
                 $vat_rate = (float) ($totals['aliquota_iva'] ?? 22);
                 $operation_kind = 'sale';
@@ -5259,14 +7928,33 @@ class MGWS_REST_API {
                     // cambio, cosi' i totali non dipendono dalle righe.
                     $receipt_lines[$index]['operation_kind'] = $operation_kind;
                 }
-                MGWS_DB::save_pos_receipt_lines($receipt_id, $receipt_lines);
+                $saved_lines = MGWS_DB::save_pos_receipt_lines($receipt_id, $receipt_lines);
+                if ((int) $saved_lines !== count($receipt_lines)) {
+                    // Uno scontrino senza righe non e' verificabile: il reso
+                    // non avrebbe un residuo su cui contare.
+                    // A receipt without lines cannot be checked: the return
+                    // would have no remainder to count against.
+                    throw new Exception(sprintf(
+                        'POS receipt %d stored %d of %d lines',
+                        $receipt_id,
+                        (int) $saved_lines,
+                        count($receipt_lines)
+                    ));
+                }
             }
             $sequential_number = (int) ($receipt_row['sequential_number'] ?? 0);
             if ($sequential_number > 0) {
-                update_post_meta($order_id, '_mgws_pos_receipt_sequential_number', $sequential_number);
-                update_post_meta($order_id, '_mgws_pos_receipt_key', $receipt_key);
+                $order->update_meta_data('_mgws_pos_receipt_sequential_number', $sequential_number);
+                $order->update_meta_data('_mgws_pos_receipt_key', $receipt_key);
+                $order->save();
             }
 
+            // La risposta si costruisce qui perche' l'idempotenza deve essere
+            // registrata prima del commit: un checkout committato ma marcato
+            // "failed" verrebbe ripetuto dalla cassa e scaricherebbe due volte.
+            // The response is built here because the idempotency result must be
+            // stored before the commit: a checkout committed but marked
+            // "failed" would be retried by the till and reduce stock twice.
             $response = array(
                 'success' => true,
                 'ok' => true,
@@ -5291,13 +7979,59 @@ class MGWS_REST_API {
                 }
             }
 
+            // Qui la vendita e' completa e coerente: movimenti, scontrino,
+            // righe e idempotenza stanno nello stesso commit.
+            // The sale is complete and consistent here: movements, receipt,
+            // lines and idempotency are in the same commit.
+            $wpdb->query('COMMIT');
+            $committed = true;
+
+            // Il POS scrive il totale: il movimento e' suo, e WooCommerce non
+            // l'ha scaricato da solo perche' l'ordine nasce gia' nello stato
+            // finale e nessuna transizione di stato fa scattare il suo hook.
+            // The POS writes the total: the movement is its own, and
+            // WooCommerce did not reduce it by itself because the order is
+            // created already in its final status, so no status transition
+            // fires its hook.
+            $woo_stock_errors = $this->apply_pos_woo_stock_deltas($movement_plan);
+            // WooCommerce moves the kit product, never its components.
+            if (!empty($pos_kit_allocations)) {
+                $woo_stock_errors = array_merge($woo_stock_errors, MGWS_Kits::commit_components_to_woo($pos_kit_allocations, -1));
+            }
+            if (!empty($woo_stock_errors)) {
+                $order->add_order_note(
+                    __('POS checkout: WooCommerce stock was not fully applied. The reconciliation will close the gap.', 'mg-warehouse-stock')
+                    . ' ' . implode(' | ', $woo_stock_errors)
+                );
+                $order->update_meta_data('_mgws_woo_stock_errors', implode(' | ', $woo_stock_errors));
+                $order->save();
+            } else {
+                // Segna l'ordine come scaricato: se un domani lo stato cambia,
+                // WooCommerce non deve scaricare una seconda volta.
+                // Mark the order as reduced: if the status changes later,
+                // WooCommerce must not reduce it a second time.
+                $order->get_data_store()->set_stock_reduced($order, true);
+            }
+
             return rest_ensure_response($response);
+
         } catch (Exception $e) {
             global $wpdb;
-            $wpdb->query('ROLLBACK');
+            if (!$committed) {
+                $wpdb->query('ROLLBACK');
+            }
             $recovery_state = 'no_order_created';
-            if ($order_id > 0 && function_exists('wp_delete_post')) {
-                $recovery_state = wp_delete_post($order_id, true) ? 'order_deleted' : 'order_delete_failed';
+            if ($order_id > 0) {
+                // Cancella tramite l'ordine: con HPOS l'ordine non e' un post
+                // e `wp_delete_post()` lascerebbe la riga in `wp_wc_orders`.
+                // Delete through the order: with HPOS the order is not a post
+                // and `wp_delete_post()` would leave the row in `wp_wc_orders`.
+                if ($committed) {
+                    $recovery_state = 'order_kept_after_commit';
+                } else {
+                    $deleted = $order->delete(true);
+                    $recovery_state = $deleted ? 'order_deleted' : 'order_delete_failed';
+                }
             }
             if ($idempotency_reserved) {
                 MGWS_DB::mark_pos_idempotency_failed(
@@ -5781,6 +8515,30 @@ public function route_pos_receipt_status(WP_REST_Request $request) {
     ));
 }
 
+/**
+ * Righe annullate in cassa (scansionate e poi tolte, o carrello svuotato):
+ * finiscono nel libro movimenti, non sullo scontrino. La giacenza non cambia.
+ * Lines voided at the till go to the movement ledger, never to the receipt.
+ */
+public function route_pos_voids(WP_REST_Request $request) {
+    $lines = $request->get_param('lines');
+    if (!is_array($lines) || empty($lines)) {
+        return new WP_Error('mgws_invalid_lines', 'lines must be a non-empty array', array('status' => 400));
+    }
+    $ids = MGWS_DB::insert_pos_void_moves($lines, array(
+        'reason' => (string) $request->get_param('reason'),
+        'receipt_key' => (string) $request->get_param('receipt_key'),
+        'shift_id' => (string) $request->get_param('shift_id'),
+        'register_name' => (string) $request->get_param('register_name'),
+        'site_id' => (int) $request->get_param('site_id'),
+    ), get_current_user_id());
+    return rest_ensure_response(array(
+        'ok' => true,
+        'recorded' => count($ids),
+        'move_ids' => $ids,
+    ));
+}
+
 private function pos_closing_args() {
     return array(
         'closing_key' => array('required' => true, 'type' => 'string', 'sanitize_callback' => array($this, 'sanitize_pos_shift_key'), 'validate_callback' => array($this, 'validate_pos_shift_key')),
@@ -6067,6 +8825,594 @@ private function resolve_pos_shift_ident($ident) {
         return rest_ensure_response(array('product_id' => (int) $id, 'variation_id' => 0));
     }
 
+    public function route_permission_sets_list(WP_REST_Request $request) {
+        return rest_ensure_response(array(
+            'ok' => true,
+            'items' => MGWS_Permission_Sets::all(),
+            'catalog' => MGWS_Permission_Sets::catalog_list(),
+            'can_manage' => current_user_can('mgws_roles_manage') || current_user_can('manage_options'),
+        ));
+    }
+
+    public function route_permission_set_create(WP_REST_Request $request) {
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $created = MGWS_Permission_Sets::create(
+            (string) ($body['slug'] ?? ''),
+            (string) ($body['label'] ?? ''),
+            $body['capabilities'] ?? array()
+        );
+        if (is_wp_error($created)) {
+            return $created;
+        }
+        return rest_ensure_response($created);
+    }
+
+    public function route_permission_set_update(WP_REST_Request $request) {
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        // Slug ed etichetta non sono modificabili: il nome del ruolo vive nel
+        // meta di ogni utente e il display name non ha un'API di rinomina.
+        if (array_key_exists('slug', $body) || array_key_exists('label', $body)) {
+            return new WP_Error('mgws_bad_request', 'Only capabilities can be changed on a permission set', array('status' => 400));
+        }
+        $updated = MGWS_Permission_Sets::update(
+            (int) $request->get_param('set_id'),
+            $body['capabilities'] ?? array()
+        );
+        if (is_wp_error($updated)) {
+            return $updated;
+        }
+        return rest_ensure_response($updated);
+    }
+
+    public function route_permission_set_delete(WP_REST_Request $request) {
+        $set_id = (int) $request->get_param('set_id');
+        $deleted = MGWS_Permission_Sets::delete($set_id);
+        if (is_wp_error($deleted)) {
+            return $deleted;
+        }
+        return rest_ensure_response(array(
+            'ok' => true,
+            'deleted' => true,
+            'id' => $set_id,
+        ));
+    }
+
+    public function route_lots_list(WP_REST_Request $request) {
+        $product_id = (int) $request->get_param('product_id');
+        $variation_id = (int) $request->get_param('variation_id');
+        if ($product_id <= 0) {
+            return new WP_Error('mgws_bad_request', 'product_id is required', array('status' => 400));
+        }
+        $limit = (int) $request->get_param('limit');
+        $offset = (int) $request->get_param('offset');
+        if ($limit <= 0) {
+            $limit = 100;
+        }
+        if ($limit > 500) {
+            $limit = 500;
+        }
+        if ($offset < 0) {
+            $offset = 0;
+        }
+        $lots = MGWS_Stock_Lots::list_for_item($product_id, $variation_id);
+        $total = count($lots);
+        $slice = array_slice($lots, $offset, $limit);
+        return rest_ensure_response(array(
+            'ok' => true,
+            'total' => $total,
+            'offset' => $offset,
+            'limit' => $limit,
+            'items' => array_values($slice),
+        ));
+    }
+
+    public function route_lot_create(WP_REST_Request $request) {
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $product_id = (int) ($body['product_id'] ?? 0);
+        $variation_id = (int) ($body['variation_id'] ?? 0);
+        $created = MGWS_Stock_Lots::create(
+            $product_id,
+            $variation_id,
+            (int) ($body['supplier_id'] ?? 0),
+            (string) ($body['lot_code'] ?? ''),
+            $body['expires_at_gmt'] ?? null,
+            $body['received_at_gmt'] ?? null,
+            isset($body['note']) ? (string) $body['note'] : null,
+            get_current_user_id()
+        );
+        if (is_wp_error($created)) {
+            return $created;
+        }
+        return rest_ensure_response($created);
+    }
+
+    public function route_lot_update(WP_REST_Request $request) {
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $updated = MGWS_Stock_Lots::update(
+            (int) $request->get_param('lot_id'),
+            (int) ($body['supplier_id'] ?? 0),
+            (string) ($body['lot_code'] ?? ''),
+            $body['expires_at_gmt'] ?? null,
+            $body['received_at_gmt'] ?? null,
+            array_key_exists('note', $body) ? (string) $body['note'] : null
+        );
+        if (is_wp_error($updated)) {
+            return $updated;
+        }
+        return rest_ensure_response($updated);
+    }
+
+    public function route_lot_delete(WP_REST_Request $request) {
+        $deleted = MGWS_Stock_Lots::delete((int) $request->get_param('lot_id'));
+        if (is_wp_error($deleted)) {
+            return $deleted;
+        }
+        return rest_ensure_response(array('ok' => true, 'deleted' => true));
+    }
+
+    public function route_lot_level_upsert(WP_REST_Request $request) {
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $result = MGWS_Stock_Lots::upsert_level(
+            (int) $request->get_param('lot_id'),
+            (int) ($body['warehouse_id'] ?? 0),
+            (string) ($body['room'] ?? ''),
+            (string) ($body['rack'] ?? ''),
+            (string) ($body['shelf'] ?? ''),
+            (int) ($body['qty'] ?? 0)
+        );
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response(array('ok' => true));
+    }
+
+    public function route_transfers_list(WP_REST_Request $request) {
+        $status = (string) $request->get_param('status');
+        $limit = (int) $request->get_param('limit');
+        $offset = (int) $request->get_param('offset');
+        if ($limit <= 0) {
+            $limit = 100;
+        }
+        if ($limit > 500) {
+            $limit = 500;
+        }
+        if ($offset < 0) {
+            $offset = 0;
+        }
+        $items = MGWS_Stock_Transfers::list($status, $limit, $offset);
+        return rest_ensure_response(array(
+            'ok' => true,
+            'items' => array_values($items),
+            'limit' => $limit,
+            'offset' => $offset,
+        ));
+    }
+
+    public function route_transfer_get(WP_REST_Request $request) {
+        $transfer = MGWS_Stock_Transfers::get((int) $request->get_param('transfer_id'));
+        if (!$transfer) {
+            return new WP_Error('mgws_not_found', 'Transfer not found', array('status' => 404));
+        }
+        return rest_ensure_response($transfer);
+    }
+
+    public function route_transfer_create(WP_REST_Request $request) {
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $created = MGWS_Stock_Transfers::create(
+            (int) ($body['from_warehouse_id'] ?? 0),
+            (int) ($body['to_warehouse_id'] ?? 0),
+            isset($body['note']) ? (string) $body['note'] : null,
+            get_current_user_id()
+        );
+        if (is_wp_error($created)) {
+            return $created;
+        }
+        return rest_ensure_response($created);
+    }
+
+    public function route_transfer_add_line(WP_REST_Request $request) {
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $updated = MGWS_Stock_Transfers::add_line(
+            (int) $request->get_param('transfer_id'),
+            (int) ($body['product_id'] ?? 0),
+            (int) ($body['variation_id'] ?? 0),
+            (int) ($body['qty'] ?? 0)
+        );
+        if (is_wp_error($updated)) {
+            return $updated;
+        }
+        return rest_ensure_response($updated);
+    }
+
+    public function route_transfer_remove_line(WP_REST_Request $request) {
+        $updated = MGWS_Stock_Transfers::remove_line((int) $request->get_param('line_id'));
+        if (is_wp_error($updated)) {
+            return $updated;
+        }
+        return rest_ensure_response($updated);
+    }
+
+    public function route_transfer_send(WP_REST_Request $request) {
+        $result = MGWS_Stock_Transfers::send(
+            (int) $request->get_param('transfer_id'),
+            get_current_user_id()
+        );
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response($result);
+    }
+
+    public function route_transfer_receive(WP_REST_Request $request) {
+        $result = MGWS_Stock_Transfers::receive(
+            (int) $request->get_param('transfer_id'),
+            get_current_user_id()
+        );
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response($result);
+    }
+
+    public function route_transfer_cancel(WP_REST_Request $request) {
+        $result = MGWS_Stock_Transfers::cancel(
+            (int) $request->get_param('transfer_id'),
+            get_current_user_id()
+        );
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response($result);
+    }
+
+    public function route_returns_list(WP_REST_Request $request) {
+        $status = (string) $request->get_param('status');
+        $order_id = (int) $request->get_param('order_id');
+        $limit = (int) $request->get_param('limit');
+        $offset = (int) $request->get_param('offset');
+        if ($limit <= 0) {
+            $limit = 100;
+        }
+        if ($limit > 500) {
+            $limit = 500;
+        }
+        if ($offset < 0) {
+            $offset = 0;
+        }
+        $items = MGWS_Returns::list($status, $order_id, $limit, $offset);
+        return rest_ensure_response(array(
+            'ok' => true,
+            'items' => array_values($items),
+            'limit' => $limit,
+            'offset' => $offset,
+        ));
+    }
+
+    public function route_return_get(WP_REST_Request $request) {
+        $return = MGWS_Returns::get((int) $request->get_param('return_id'));
+        if (!$return) {
+            return new WP_Error('mgws_not_found', 'Return not found', array('status' => 404));
+        }
+        return rest_ensure_response($return);
+    }
+
+    public function route_return_create(WP_REST_Request $request) {
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $created = MGWS_Returns::create(
+            (int) ($body['order_id'] ?? 0),
+            (int) ($body['customer_id'] ?? 0),
+            (int) ($body['warehouse_id'] ?? 0),
+            isset($body['reason']) ? (string) $body['reason'] : null,
+            isset($body['note']) ? (string) $body['note'] : null,
+            get_current_user_id()
+        );
+        if (is_wp_error($created)) {
+            return $created;
+        }
+        return rest_ensure_response($created);
+    }
+
+    public function route_return_delete(WP_REST_Request $request) {
+        $result = MGWS_Returns::delete((int) $request->get_param('return_id'));
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response(array('ok' => true, 'deleted' => true));
+    }
+
+    public function route_return_add_line(WP_REST_Request $request) {
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $updated = MGWS_Returns::add_line(
+            (int) $request->get_param('return_id'),
+            (int) ($body['product_id'] ?? 0),
+            (int) ($body['variation_id'] ?? 0),
+            (int) ($body['qty'] ?? 0)
+        );
+        if (is_wp_error($updated)) {
+            return $updated;
+        }
+        return rest_ensure_response($updated);
+    }
+
+    public function route_return_remove_line(WP_REST_Request $request) {
+        $updated = MGWS_Returns::remove_line((int) $request->get_param('line_id'));
+        if (is_wp_error($updated)) {
+            return $updated;
+        }
+        return rest_ensure_response($updated);
+    }
+
+    public function route_return_approve(WP_REST_Request $request) {
+        $result = MGWS_Returns::approve(
+            (int) $request->get_param('return_id'),
+            get_current_user_id()
+        );
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response($result);
+    }
+
+    public function route_return_receive(WP_REST_Request $request) {
+        $result = MGWS_Returns::receive(
+            (int) $request->get_param('return_id'),
+            get_current_user_id()
+        );
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response($result);
+    }
+
+    public function route_return_reject(WP_REST_Request $request) {
+        $result = MGWS_Returns::reject(
+            (int) $request->get_param('return_id'),
+            get_current_user_id()
+        );
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response($result);
+    }
+
+    public function route_return_close(WP_REST_Request $request) {
+        $result = MGWS_Returns::close(
+            (int) $request->get_param('return_id'),
+            get_current_user_id()
+        );
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response($result);
+    }
+
+    public function route_price_lists_list(WP_REST_Request $request) {
+        $customer_id = (int) $request->get_param('customer_id');
+        $supplier_id = (int) $request->get_param('supplier_id');
+        $active_param = $request->get_param('active');
+        $active = null;
+        if ($active_param !== null) {
+            $active = (bool) $active_param;
+        }
+        $limit = (int) $request->get_param('limit');
+        $offset = (int) $request->get_param('offset');
+        if ($limit <= 0) {
+            $limit = 100;
+        }
+        if ($limit > 500) {
+            $limit = 500;
+        }
+        if ($offset < 0) {
+            $offset = 0;
+        }
+        $items = MGWS_Price_Lists::list($customer_id, $supplier_id, $active, $limit, $offset);
+        return rest_ensure_response(array(
+            'ok' => true,
+            'items' => array_values($items),
+            'limit' => $limit,
+            'offset' => $offset,
+        ));
+    }
+
+    public function route_price_list_get(WP_REST_Request $request) {
+        $list = MGWS_Price_Lists::get((int) $request->get_param('list_id'));
+        if (!$list) {
+            return new WP_Error('mgws_not_found', 'Price list not found', array('status' => 404));
+        }
+        return rest_ensure_response($list);
+    }
+
+    public function route_price_list_create(WP_REST_Request $request) {
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $created = MGWS_Price_Lists::create(
+            (string) ($body['name'] ?? ''),
+            (int) ($body['customer_id'] ?? 0),
+            (int) ($body['supplier_id'] ?? 0),
+            (string) ($body['currency'] ?? 'EUR'),
+            $body['valid_from_gmt'] ?? null,
+            $body['valid_to_gmt'] ?? null,
+            isset($body['note']) ? (string) $body['note'] : null,
+            get_current_user_id()
+        );
+        if (is_wp_error($created)) {
+            return $created;
+        }
+        return rest_ensure_response($created);
+    }
+
+    public function route_price_list_update(WP_REST_Request $request) {
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $updated = MGWS_Price_Lists::update(
+            (int) $request->get_param('list_id'),
+            (string) ($body['name'] ?? ''),
+            (int) ($body['customer_id'] ?? 0),
+            (int) ($body['supplier_id'] ?? 0),
+            (string) ($body['currency'] ?? 'EUR'),
+            $body['valid_from_gmt'] ?? null,
+            $body['valid_to_gmt'] ?? null,
+            array_key_exists('active', $body) ? (bool) $body['active'] : true,
+            array_key_exists('note', $body) ? (string) $body['note'] : null
+        );
+        if (is_wp_error($updated)) {
+            return $updated;
+        }
+        return rest_ensure_response($updated);
+    }
+
+    public function route_price_list_delete(WP_REST_Request $request) {
+        $deleted = MGWS_Price_Lists::delete((int) $request->get_param('list_id'));
+        if (is_wp_error($deleted)) {
+            return $deleted;
+        }
+        return rest_ensure_response(array('ok' => true, 'deleted' => true));
+    }
+
+    public function route_price_list_item_upsert(WP_REST_Request $request) {
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $updated = MGWS_Price_Lists::upsert_item(
+            (int) $request->get_param('list_id'),
+            (int) ($body['product_id'] ?? 0),
+            (int) ($body['variation_id'] ?? 0),
+            (int) ($body['price_cents'] ?? 0),
+            (int) ($body['min_qty'] ?? 1)
+        );
+        if (is_wp_error($updated)) {
+            return $updated;
+        }
+        return rest_ensure_response($updated);
+    }
+
+    public function route_price_list_item_delete(WP_REST_Request $request) {
+        $updated = MGWS_Price_Lists::remove_item(
+            (int) $request->get_param('list_id'),
+            (int) $request->get_param('item_id')
+        );
+        if (is_wp_error($updated)) {
+            return $updated;
+        }
+        return rest_ensure_response($updated);
+    }
+
+    public function route_approval_rules_list(WP_REST_Request $request) {
+        $document_type = (string) $request->get_param('document_type');
+        $active_param = $request->get_param('active');
+        $active = null;
+        if ($active_param !== null) {
+            $active = (bool) $active_param;
+        }
+        $limit = (int) $request->get_param('limit');
+        $offset = (int) $request->get_param('offset');
+        if ($limit <= 0) {
+            $limit = 100;
+        }
+        if ($limit > 500) {
+            $limit = 500;
+        }
+        if ($offset < 0) {
+            $offset = 0;
+        }
+        $items = MGWS_Approval_Rules::list($document_type, $active, $limit, $offset);
+        return rest_ensure_response(array(
+            'ok' => true,
+            'items' => array_values($items),
+            'limit' => $limit,
+            'offset' => $offset,
+        ));
+    }
+
+    public function route_approval_rule_create(WP_REST_Request $request) {
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $created = MGWS_Approval_Rules::create(
+            (string) ($body['document_type'] ?? ''),
+            (int) ($body['threshold_cents'] ?? 0),
+            (string) ($body['required_capability'] ?? ''),
+            isset($body['note']) ? (string) $body['note'] : null,
+            get_current_user_id()
+        );
+        if (is_wp_error($created)) {
+            return $created;
+        }
+        return rest_ensure_response($created);
+    }
+
+    public function route_approval_rule_update(WP_REST_Request $request) {
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $updated = MGWS_Approval_Rules::update(
+            (int) $request->get_param('rule_id'),
+            (string) ($body['document_type'] ?? ''),
+            (int) ($body['threshold_cents'] ?? 0),
+            (string) ($body['required_capability'] ?? ''),
+            array_key_exists('active', $body) ? (bool) $body['active'] : true,
+            array_key_exists('note', $body) ? (string) $body['note'] : null
+        );
+        if (is_wp_error($updated)) {
+            return $updated;
+        }
+        return rest_ensure_response($updated);
+    }
+
+    public function route_approval_rule_delete(WP_REST_Request $request) {
+        $deleted = MGWS_Approval_Rules::delete((int) $request->get_param('rule_id'));
+        if (is_wp_error($deleted)) {
+            return $deleted;
+        }
+        return rest_ensure_response(array('ok' => true, 'deleted' => true));
+    }
+
+    public function route_approval_rule_check(WP_REST_Request $request) {
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = array();
+        }
+        $result = MGWS_Approval_Rules::needs_approval(
+            (string) ($body['document_type'] ?? ''),
+            (int) ($body['amount_cents'] ?? 0)
+        );
+        return rest_ensure_response(array_merge(array('ok' => true), $result));
+    }
+
     public function route_get_user_permissions(WP_REST_Request $request) {
         $target = $this->get_target_user_from_request($request);
         if (is_wp_error($target)) {
@@ -6083,12 +9429,25 @@ private function resolve_pos_shift_ident($ident) {
             $caps[$cap] = !empty($target->allcaps[$cap]);
         }
 
+        // Le chiavi dei ruoli sono nomi tecnici ("mgws_cashier"): l'app mostra
+        // l'etichetta. `editable_roles` resta una lista di chiavi, il contratto
+        // non cambia forma.
+        if (!function_exists('get_editable_roles')) {
+            require_once ABSPATH . 'wp-admin/includes/user.php';
+        }
+        $editable_roles = get_editable_roles();
+        $role_labels = array();
+        foreach ($editable_roles as $role_key => $role_info) {
+            $role_labels[(string) $role_key] = (string) ($role_info['name'] ?? $role_key);
+        }
+
         return rest_ensure_response(array(
             'user_id' => (int) $target->ID,
             'roles' => array_values(array_map('strval', $target->roles)),
+            'role_labels' => $role_labels,
             'capabilities' => $caps,
             'capability_whitelist' => $whitelist,
-            'editable_roles' => array_keys(get_editable_roles()),
+            'editable_roles' => array_keys($editable_roles),
         ));
     }
 
@@ -6114,7 +9473,10 @@ private function resolve_pos_shift_ident($ident) {
             if (!is_array($body['roles'])) {
                 return new WP_Error('mgws_bad_request', 'roles must be an array', array('status' => 400));
             }
-            $editable_roles = get_editable_roles();
+            if (!function_exists('get_editable_roles')) {
+            require_once ABSPATH . 'wp-admin/includes/user.php';
+        }
+        $editable_roles = get_editable_roles();
             $roles = array_values(array_unique(array_filter(array_map('sanitize_key', $body['roles']))));
             foreach ($roles as $role) {
                 if (!isset($editable_roles[$role])) {
@@ -6124,6 +9486,13 @@ private function resolve_pos_shift_ident($ident) {
 
             if (empty($roles)) {
                 return new WP_Error('mgws_bad_request', 'At least one role is required', array('status' => 400));
+            }
+
+            // Il negozio non deve restare senza amministratore. Il controllo
+            // vale anche quando il target non e' l'autore: e' il negozio che
+            // perde l'accesso, non l'autore.
+            if (MGWS_Permission_Sets::is_last_administrator((int) $target->ID, $roles)) {
+                return new WP_Error('mgws_last_admin', 'The shop would be left without an administrator', array('status' => 409));
             }
 
             $target->set_role(array_shift($roles));
@@ -6419,6 +9788,15 @@ private function resolve_pos_shift_ident($ident) {
             'mgws_order_accept',
             'mgws_manage_employees',
             'mgws_reports_read',
+            'mgws_stock_reset_manage',
+            'mgws_supplier_prices_manage',
+            'mgws_count_schedules_manage',
+            'mgws_shipments_manage',
+            'mgws_reservations_manage',
+            'mgws_payments_manage',
+            'mgws_documents_manage',
+            'mgws_product_barcodes_manage',
+            'mgws_kits_manage',
         );
     }
 
@@ -6623,21 +10001,6 @@ private function resolve_pos_shift_ident($ident) {
         return $out;
     }
 
-    private function sync_woo_stock($product_id, $variation_id) {
-        if (!function_exists('wc_get_product')) {
-            return;
-        }
-        $sum = MGWS_DB::sum_qty_for_item((int) $product_id, (int) $variation_id);
-        $product = ((int) $variation_id > 0) ? wc_get_product((int) $variation_id) : wc_get_product((int) $product_id);
-        if (!$product) {
-            return;
-        }
-        $product->set_manage_stock(true);
-        $product->set_stock_quantity((int) $sum);
-        $product->set_stock_status(((int) $sum > 0) ? 'instock' : 'outofstock');
-        $product->save();
-    }
-
     private function get_pos_idempotency_key($body) {
         if (!is_array($body)) {
             return '';
@@ -6791,11 +10154,70 @@ private function resolve_pos_shift_ident($ident) {
         return new WP_Error('mgws_idempotency_in_progress', 'Checkout with this idempotency key is already in progress', array('status' => 409));
     }
 
+    /**
+     * Applica a WooCommerce i delta di giacenza di un checkout POS.
+     *
+     * WooCommerce possiede il proprio totale, ma per una vendita POS nessuno
+     * lo ha mosso: l'ordine nasce gia' nello stato finale, quindi non c'e'
+     * transizione di stato e l'hook con cui WooCommerce scarica non scatta
+     * mai. Il POS scrive quindi il totale da se', una volta per articolo,
+     * con lo stesso segno del movimento a ledger.
+     *
+     * Applies the POS stock deltas to WooCommerce.
+     *
+     * WooCommerce owns its own total, but for a POS sale nobody moved it: the
+     * order is created already in its final status, so there is no status
+     * transition and the hook WooCommerce uses to reduce stock never fires.
+     * The POS therefore writes the total itself, once per item, with the same
+     * sign as the ledger movement.
+     *
+     * @param array $movement_plan Steps produced by `prepare_pos_checkout_plan()`.
+     * @return array<int,string> Errors to surface on the order; empty on success.
+     */
+    private function apply_pos_woo_stock_deltas(array $movement_plan) {
+        if (!class_exists('MGWS_Woo_Stock')) {
+            return array();
+        }
+
+        $deltas = array();
+        foreach ($movement_plan as $step) {
+            $key = (int) $step['product_id'] . ':' . (int) $step['variation_id'];
+            if (!isset($deltas[$key])) {
+                $deltas[$key] = array(
+                    'product_id' => (int) $step['product_id'],
+                    'variation_id' => (int) $step['variation_id'],
+                    'delta' => 0,
+                );
+            }
+            $deltas[$key]['delta'] += $step['kind'] === 'sale' ? -(int) $step['qty'] : (int) $step['qty'];
+        }
+
+        $errors = array();
+        foreach ($deltas as $entry) {
+            if ($entry['delta'] === 0) {
+                continue;
+            }
+            $product = $entry['variation_id'] > 0 ? wc_get_product($entry['variation_id']) : wc_get_product($entry['product_id']);
+            if ($product && !$product->managing_stock()) {
+                // Nessun numero da muovere, e il riconciliatore salta questi
+                // articoli: non e' una divergenza.
+                // No number to move, and the reconciler skips these items: it
+                // is not a divergence.
+                continue;
+            }
+            $result = MGWS_Woo_Stock::commit_delta($entry['product_id'], $entry['variation_id'], (int) $entry['delta']);
+            if (empty($result['ok'])) {
+                $errors[] = (string) ($result['message'] ?? 'unknown error');
+            }
+        }
+
+        return $errors;
+    }
+
     private function prepare_pos_checkout_plan($sale_items, $return_items, $site_limit) {
         $plan = array(
             'sale_items' => array(),
             'return_items' => array(),
-            'touched_items' => array(),
             'movement_plan' => array(),
             'sale_audit' => array(),
             'return_audit' => array(),
@@ -6815,10 +10237,6 @@ private function resolve_pos_shift_ident($ident) {
                 'allocations' => $sale_item['allocations'],
             );
             $plan['sale_audit'][] = $sale_item['audit'];
-            $plan['touched_items'][$sale_item['product_key']] = array(
-                'product_id' => $sale_item['product_id'],
-                'variation_id' => $sale_item['variation_id'],
-            );
         }
 
         foreach ($return_items as $item) {
@@ -6835,10 +10253,6 @@ private function resolve_pos_shift_ident($ident) {
                 'location' => $return_item['location'],
             );
             $plan['return_audit'][] = $return_item['audit'];
-            $plan['touched_items'][$return_item['product_key']] = array(
-                'product_id' => $return_item['product_id'],
-                'variation_id' => $return_item['variation_id'],
-            );
         }
 
         return $plan;
@@ -6881,6 +10295,65 @@ private function resolve_pos_shift_ident($ident) {
         }
 
         return $out;
+    }
+
+    /**
+     * Scrive sulle righe scontrino il costo accumulato per articolo.
+     *
+     * Lo stesso articolo puo' comparire su piu' righe: il costo si distribuisce
+     * per quantita' e l'ultima riga prende il resto esatto, cosi' la somma delle
+     * righe e' il totale accumulato. Se una sola allocazione aveva valore
+     * ignoto, l'intero articolo resta a costo NULL: una somma parziale
+     * sottostimerebbe il costo e gonfierebbe il margine.
+     * Spreads the accumulated item cost over its receipt lines by quantity.
+     *
+     * @param array $lines   Receipt lines, in document order.
+     * @param array $totals  product_key => cost in minor units.
+     * @param array $unknown product_key => true when a value was unreadable.
+     * @return array
+     */
+    private function apply_pos_line_costs(array $lines, array $totals, array $unknown) {
+        foreach ($lines as $index => $line) {
+            $lines[$index]['cost_total_cents'] = null;
+            $lines[$index]['unit_cost_cents'] = null;
+        }
+
+        $groups = array();
+        foreach ($lines as $index => $line) {
+            $key = (int) ($line['product_id'] ?? 0) . ':' . (int) ($line['variation_id'] ?? 0);
+            $groups[$key][] = $index;
+        }
+
+        foreach ($groups as $key => $indices) {
+            if (isset($unknown[$key]) || !isset($totals[$key])) {
+                continue;
+            }
+            $total_qty = 0;
+            foreach ($indices as $index) {
+                $total_qty += abs((int) ($lines[$index]['quantity'] ?? 0));
+            }
+            if ($total_qty <= 0) {
+                continue;
+            }
+
+            $total = (int) $totals[$key];
+            $last_position = count($indices) - 1;
+            $cumulative_qty = 0;
+            $assigned = 0;
+            foreach ($indices as $position => $index) {
+                $qty = abs((int) ($lines[$index]['quantity'] ?? 0));
+                $cumulative_qty += $qty;
+                $target = $position === $last_position
+                    ? $total
+                    : (int) round($total * $cumulative_qty / $total_qty);
+                $share = $target - $assigned;
+                $assigned = $target;
+                $lines[$index]['cost_total_cents'] = $share;
+                $lines[$index]['unit_cost_cents'] = $qty > 0 ? (int) round($share / $qty) : null;
+            }
+        }
+
+        return $lines;
     }
 
     private function validate_pos_return_references($return_items) {
@@ -7250,6 +10723,11 @@ private function resolve_pos_shift_ident($ident) {
             if ($warehouse_id <= 0 || $site_id <= 0 || ($site_limit > 0 && $site_id !== $site_limit)) {
                 continue;
             }
+            // Never fall back to the "Unassigned" warehouse: real stock that
+            // arrives without a location must land somewhere a human chose.
+            if (MGWS_Stock_Reconciler::is_system_warehouse($warehouse_id)) {
+                continue;
+            }
             return array(
                 'site_id' => $site_id,
                 'warehouse_id' => $warehouse_id,
@@ -7310,7 +10788,7 @@ private function resolve_pos_shift_ident($ident) {
         }
         $warehouses = get_posts(array(
             'post_type' => 'mg_warehouse',
-            'posts_per_page' => 1,
+            'posts_per_page' => -1,
             'fields' => 'ids',
             'meta_query' => array(
                 array(
@@ -7322,7 +10800,8 @@ private function resolve_pos_shift_ident($ident) {
             'orderby' => 'title',
             'order' => 'ASC',
         ));
-        if (empty($warehouses) || !is_array($warehouses)) {
+        $warehouses = MGWS_Stock_Reconciler::filter_system_warehouses(is_array($warehouses) ? $warehouses : array());
+        if (empty($warehouses)) {
             return 0;
         }
         return (int) $warehouses[0];
@@ -7361,6 +10840,18 @@ private function resolve_pos_shift_ident($ident) {
 
     private function find_product_id_by_barcode($barcode) {
         global $wpdb;
+
+        // 0) Codes saved by MGWS itself (mg_product_barcodes). The id returned
+        // is the post that owns the code: the variation when there is one.
+        if (class_exists('MGWS_Product_Barcodes')) {
+            $own = MGWS_Product_Barcodes::find_by_barcode((string) $barcode);
+            if (is_array($own)) {
+                $pid = (int) $own['variation_id'] > 0 ? (int) $own['variation_id'] : (int) $own['product_id'];
+                if ($pid > 0) {
+                    return $pid;
+                }
+            }
+        }
 
         // 1) ATUM table (if installed): wp_atum_product_data.barcode -> product_id
         $atum_table = $wpdb->prefix . 'atum_product_data';
