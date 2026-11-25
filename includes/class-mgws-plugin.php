@@ -7,6 +7,7 @@ if (!defined('ABSPATH')) {
 require_once __DIR__ . '/mgws-db.php';
 require_once __DIR__ . '/class-mgws-stock-plan.php';
 require_once __DIR__ . '/class-mgws-cost-plan.php';
+require_once __DIR__ . '/class-mgws-movement-edit-plan.php';
 require_once __DIR__ . '/class-mgws-cost.php';
 require_once __DIR__ . '/class-mgws-woo-stock.php';
 require_once __DIR__ . '/class-mgws-stock-reconciler.php';

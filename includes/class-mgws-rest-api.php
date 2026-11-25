@@ -1385,7 +1385,7 @@ class MGWS_REST_API {
             '/inventory/count-sessions/(?P<session_id>\\d+)/lines' => array(array('methods' => 'POST', 'permission' => 'mutate')),
             '/inventory/count-sessions/(?P<session_id>\\d+)/approve' => array(array('methods' => 'POST', 'permission' => 'mutate')),
             '/inventory/movements' => array(array('methods' => 'GET', 'permission' => 'read')),
-            '/inventory/movements/(?P<movement_id>\\d+)' => array(array('methods' => 'GET', 'permission' => 'read')),
+            '/inventory/movements/(?P<movement_id>\\d+)' => array(array('methods' => 'GET', 'permission' => 'read'), array('methods' => 'PATCH', 'permission' => 'mutate')),
         );
     }
 
@@ -1426,6 +1426,7 @@ class MGWS_REST_API {
             '/inventory/backorders GET' => 'route_inventory_backorders_list',
             '/inventory/movements GET' => 'route_inventory_movements_list',
             '/inventory/movements/(?P<movement_id>\\d+) GET' => 'route_inventory_movement_get',
+            '/inventory/movements/(?P<movement_id>\\d+) PATCH' => 'route_inventory_movement_patch',
         );
         foreach (self::inventory_restock_route_contract() as $route => $operations) {
             $definitions = array();
@@ -1568,6 +1569,132 @@ class MGWS_REST_API {
             return new WP_Error('mgws_forbidden', 'Site outside allowed scope', array('status' => 403));
         }
         return rest_ensure_response($this->inventory_movement_response($movement));
+    }
+
+    /**
+     * Riapre un "Aggiungi": cambia la quantita' della riga gia' scritta.
+     *
+     * Non crea un movimento nuovo. Applica soltanto la differenza fra il valore
+     * auditato vecchio e quello nuovo, e solo se dopo quel carico non e' successa
+     * un'altra operazione: in quel caso lo stock della riga non sarebbe piu' una
+     * funzione della sua quantita' e il delta calpesterebbe il movimento dopo.
+     */
+    public function route_inventory_movement_patch(WP_REST_Request $request) {
+        global $wpdb;
+
+        $storage = $this->require_inventory_restock_storage();
+        if (is_wp_error($storage)) {
+            return $storage;
+        }
+        $movement_id = $this->inventory_positive($request->get_param('movement_id'), 'movement_id');
+        if (is_wp_error($movement_id)) {
+            return $movement_id;
+        }
+        $body = $this->inventory_body($request);
+        $new_qty = $this->inventory_non_negative($body['quantity'] ?? null, 'quantity');
+        $note = $this->inventory_restock_text($body['note'] ?? '', 'note', 4000, false, true);
+        $unit_cost = $this->inventory_optional_money($body['unit_cost'] ?? null, 'unit_cost');
+        if (is_wp_error($new_qty)) {
+            return $new_qty;
+        }
+        if (is_wp_error($note)) {
+            return $note;
+        }
+        if (is_wp_error($unit_cost)) {
+            return $unit_cost;
+        }
+
+        $row = MGWS_DB::get_move($movement_id);
+        if (!is_array($row)) {
+            return new WP_Error('mgws_movement_not_found', 'Movement not found', array('status' => 404));
+        }
+        $scope = $this->inventory_restock_row_scope($row);
+        if (is_wp_error($scope)) {
+            return $scope;
+        }
+        if (!MGWS_Movement_Edit_Plan::can_edit($row)) {
+            return new WP_Error('mgws_movement_not_editable', 'Only quick-load movements can be edited', array('status' => 409));
+        }
+        $newer_rows = MGWS_DB::list_moves_after($row, 100);
+        if (count($newer_rows) >= 100 || !MGWS_Movement_Edit_Plan::is_last_operation($row, $newer_rows)) {
+            return new WP_Error('mgws_movement_not_last', 'Only the last movement can be edited', array('status' => 409));
+        }
+        $plan = MGWS_Movement_Edit_Plan::build($row, $new_qty);
+        if (!is_array($plan)) {
+            return new WP_Error('mgws_movement_invalid_quantity', 'Quantity cannot be applied to this movement', array('status' => 409));
+        }
+
+        $product_id = (int) $row['product_id'];
+        $variation_id = (int) ($row['variation_id'] ?? 0);
+        $old_qty = $plan['old_qty'];
+        $value_before = ($row['value_delta_cents'] ?? null) !== null ? (int) $row['value_delta_cents'] : null;
+        if ($unit_cost !== null && $plan['delta'] !== 0) {
+            $plan['value_delta_cents'] = MGWS_Cost_Plan::value_for_quantity($value_before, $old_qty, $plan['new_qty'], $unit_cost);
+        }
+        $move_unit_cost = $unit_cost ?? $plan['unit_cost_cents'];
+        $previous_stock = (int) ($row['stock_after'] ?? 0);
+        $current_stock = (int) $plan['stock_after'];
+
+        $wpdb->query('START TRANSACTION');
+        if ($plan['delta'] !== 0) {
+            $applied = MGWS_DB::apply_delta_level(
+                (int) ($row['warehouse_id'] ?? 0),
+                $product_id,
+                $variation_id,
+                $plan['delta'],
+                (string) ($row['room'] ?? ''),
+                (string) ($row['rack'] ?? ''),
+                (string) ($row['shelf'] ?? ''),
+                $move_unit_cost
+            );
+            if (empty($applied['ok'])) {
+                $wpdb->query('ROLLBACK');
+                return new WP_Error('mgws_conflict', 'Unable to apply the movement edit', array('status' => 409));
+            }
+            $current_stock = MGWS_DB::sum_qty_for_item($product_id, $variation_id);
+        }
+
+        // Il testo vecchio resta: la modifica e' una storia in piu', non una
+        // riscrittura di quello che e' stato registrato al carico.
+        $audit = 'Movement edit: stock ' . $previous_stock . ' -> ' . $current_stock . ' (delta ' . $plan['delta'] . ')';
+        if ($note !== '') {
+            $audit .= '; note: ' . $note;
+        }
+        $old_note = trim((string) ($row['note'] ?? ''));
+        $audit = $old_note === '' ? $audit : $old_note . "\n" . $audit;
+
+        $fields = array(
+            'qty' => $plan['new_qty'],
+            'stock_after' => $current_stock,
+            'value_delta_cents' => $plan['value_delta_cents'],
+            'note' => $audit,
+        );
+        if ($move_unit_cost !== null) {
+            $fields['unit_cost_cents'] = $move_unit_cost;
+        }
+        if (!MGWS_DB::update_move($movement_id, $fields)) {
+            $wpdb->query('ROLLBACK');
+            return new WP_Error('mgws_error', 'Unable to update the movement', array('status' => 500));
+        }
+        $wpdb->query('COMMIT');
+        MGWS_Woo_Stock::commit_delta($product_id, $variation_id, $plan['delta']);
+
+        return rest_ensure_response(array(
+            'ok' => true,
+            'operation' => 'movement_edit',
+            'movement_id' => $movement_id,
+            'ledger_movement_id' => (int) ($row['id'] ?? $movement_id),
+            'product_id' => $product_id,
+            'variation_id' => $variation_id,
+            'quantity' => $plan['new_qty'],
+            'previous_quantity' => $old_qty,
+            'quantity_delta' => $plan['delta'],
+            'previous_stock' => $previous_stock,
+            'current_stock' => $current_stock,
+            'unit_cost_cents' => $move_unit_cost,
+            'value_delta_cents' => $plan['value_delta_cents'],
+            'noop' => $plan['noop'],
+        ));
     }
 
     private function inventory_movement_filters(WP_REST_Request $request) {
@@ -1983,7 +2110,17 @@ class MGWS_REST_API {
             );
         }
         if ($route === '/inventory/movements/(?P<movement_id>\\d+)') {
-            return array('movement_id' => $this->inventory_positive_int_arg());
+            $args = array('movement_id' => $this->inventory_positive_int_arg());
+            if ($method === 'PATCH') {
+                // Quantita' assoluta, non un delta: 0 e' lecito e toglie i pezzi
+                // dal carico lasciando la riga nel libro.
+                return array_merge($args, array(
+                    'quantity' => $this->inventory_non_negative_int_arg(),
+                    'note' => array('required' => false, 'type' => 'string', 'sanitize_callback' => 'sanitize_textarea_field', 'validate_callback' => array($this, 'validate_inventory_note')),
+                    'unit_cost' => array('required' => false, 'type' => 'number', 'sanitize_callback' => 'sanitize_text_field', 'validate_callback' => array($this, 'validate_inventory_money')),
+                ));
+            }
+            return $args;
         }
         if (str_starts_with($route, '/inventory/receipts/')) {
             return array('receipt_id' => $this->inventory_positive_int_arg());
@@ -3928,6 +4065,15 @@ class MGWS_REST_API {
     public function validate_inventory_positive_int($value) { return $this->is_positive_integer($value); }
     public function validate_inventory_non_negative_int($value) { return $this->is_non_negative_integer($value); }
     public function validate_inventory_text($value) { return is_scalar($value) && strlen((string) $value) <= 1000; }
+
+    /// Un costo e' facoltativo e non negativo; il valore assoluto viene
+    /// convertito in centesimi solo dopo la validazione, nel corpo della rotta.
+    public function validate_inventory_money($value) {
+        if ($value === null || $value === '') {
+            return true;
+        }
+        return is_scalar($value) && is_numeric($value) && (float) $value >= 0;
+    }
 
     public function sanitize_inventory_tags($value) {
         return is_array($value) ? array_values(array_map('sanitize_text_field', $value)) : array();

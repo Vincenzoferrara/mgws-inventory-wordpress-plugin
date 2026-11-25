@@ -4056,6 +4056,56 @@ public static function insert_pos_shift($row) {
         return $wpdb->get_row($wpdb->prepare('SELECT * FROM %i WHERE id = %d', self::table_moves(), (int) $movement_id), ARRAY_A);
     }
 
+    /**
+     * Righe che il ledger mette dopo il movimento dato.
+     *
+     * Servono al gate "solo l'ultima operazione e' modificabile": basta una
+     * riga di un'altra operazione per bloccare la modifica. L'ordine del ledger
+     * e' ts_gmt DESC, id DESC, quindi una riga e' successiva se ha un id maggiore
+     * (scritta dopo) o un timestamp maggiore (mostrata prima in schermata).
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public static function list_moves_after($target, $limit = 100) {
+        global $wpdb;
+        if (!is_array($target) || (int) ($target['id'] ?? 0) <= 0) {
+            return array();
+        }
+        $conditions = array('id > %d');
+        $params = array((int) $target['id']);
+        $ts = (string) ($target['ts_gmt'] ?? '');
+        if ($ts !== '') {
+            $conditions[] = 'ts_gmt > %s';
+            $params[] = $ts;
+        }
+        $sql = 'SELECT * FROM %i WHERE (' . implode(' OR ', $conditions) . ') ORDER BY ts_gmt DESC, id DESC LIMIT %d';
+        array_unshift($params, self::table_moves());
+        $params[] = max(1, min(100, (int) $limit));
+        // $conditions holds only literal fragments; every value is a placeholder.
+        return $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
+    }
+
+    /**
+     * Aggiorna solo i campi auditati di una riga del libro, senza toccarne l'identita'.
+     *
+     * @param array<string,mixed> $fields Solo qty, stock_after, value_delta_cents,
+     *                                    unit_cost_cents e note sono ammessi.
+     * @return bool False solo se il database ha rifiutato la scrittura.
+     */
+    public static function update_move($movement_id, array $fields) {
+        global $wpdb;
+        $data = array();
+        foreach (array('qty', 'stock_after', 'value_delta_cents', 'unit_cost_cents', 'note') as $field) {
+            if (array_key_exists($field, $fields)) {
+                $data[$field] = $fields[$field];
+            }
+        }
+        if ($data === array()) {
+            return false;
+        }
+        return $wpdb->update(self::table_moves(), $data, array('id' => (int) $movement_id)) !== false;
+    }
+
     public static function insert_inventory_count_move($site_id, $warehouse_id, $product_id, $variation_id, $qty, $room, $rack, $shelf, $user_id, $session_id, $line_id, $reason_code, $note, $unit_cost_cents = null, $value_delta_cents = null) {
         global $wpdb;
         $inserted = $wpdb->insert(self::table_moves(), array(

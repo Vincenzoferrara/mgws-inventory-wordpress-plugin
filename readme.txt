@@ -5,7 +5,7 @@ Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 8.0
 Requires Plugins: woocommerce
-Stable tag: 2.14.1
+Stable tag: 2.15.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -96,6 +96,9 @@ The plugin exposes 178 REST endpoints under `mgws/v1` for the point of sale, loy
 4. Product variation defaults for location and purchase cost.
 
 == Changelog ==
+
+= 2.15.0 =
+* Inventory: new PATCH /inventory/movements/{id} edits the most recent "Aggiungi" row in place. It accepts an absolute non-negative quantity (0 keeps the row in the ledger), an optional note and an optional cost; later operations make the row read-only. The signed difference moves the stock level and reaches WooCommerce, the previous note is kept in the audit trail, and re-sending the same quantity is a no-op.
 
 = 2.14.1 =
 * POS: new POST /pos/voids records the items scanned at the till and then removed (line deleted, quantity lowered, cart emptied) as `void` rows of the movement ledger. They never reach the customer's receipt and do not change stock.

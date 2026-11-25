@@ -3,7 +3,7 @@
  * Plugin Name: Warehouse Stock Manager for WooCommerce
  * Plugin URI: https://github.com/Vincenzoferrara/mgws-inventory-wordpress-plugin
  * Description: Multi-site and multi-warehouse stock, picking, movement ledger, purchase orders and inventory counts for WooCommerce.
- * Version: 2.14.1
+ * Version: 2.15.0
  * Author: MG
  * Author URI: https://github.com/Vincenzoferrara
  * License: GPLv2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 
 define('MGWS_PLUGIN_FILE', __FILE__);
 define('MGWS_PLUGIN_DIR', __DIR__);
-define('MGWS_PLUGIN_VERSION', '2.14.1');
+define('MGWS_PLUGIN_VERSION', '2.15.0');
 
 require_once MGWS_PLUGIN_DIR . '/includes/class-mgws-plugin.php';
 

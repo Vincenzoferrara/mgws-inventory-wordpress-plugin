@@ -4,7 +4,7 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: MG Warehouse Stock 2.14.1\n"
+"Project-Id-Version: MG Warehouse Stock 2.15.0\n"
 "Report-Msgid-Bugs-To: https://github.com/Vincenzoferrara/mg-warehouse-stock/issues\n"
 "POT-Creation-Date: 2026-11-08 12:07+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
