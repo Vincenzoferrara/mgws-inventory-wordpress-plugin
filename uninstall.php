@@ -128,6 +128,7 @@ if (!function_exists('mgws_uninstall_all')) {
             MGWS_DB::table_kits(),
             MGWS_DB::table_kit_components(),
             MGWS_DB::table_product_barcodes(),
+            MGWS_DB::table_rfid_tags(),
         );
 
         foreach ($tables as $table) {

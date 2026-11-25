@@ -882,6 +882,11 @@ class MGWS_DB {
         return $wpdb->prefix . 'mg_product_barcodes';
     }
 
+    public static function table_rfid_tags() {
+        global $wpdb;
+        return $wpdb->prefix . 'mg_rfid_tags';
+    }
+
     public static function table_count_schedules() {
         global $wpdb;
         return $wpdb->prefix . 'mg_count_schedules';
@@ -3460,6 +3465,15 @@ public static function insert_pos_shift($row) {
             KEY idx_barcode (barcode)
         ) ENGINE=InnoDB {$charset_collate};";
 
+        $rfid_tags = self::table_rfid_tags();
+        $sql_rfid_tags = "CREATE TABLE {$rfid_tags} (
+            epc VARCHAR(128) NOT NULL,
+            product_id BIGINT UNSIGNED NULL,
+            variation_id BIGINT UNSIGNED NULL,
+            PRIMARY KEY  (epc),
+            KEY idx_product_variation (product_id, variation_id)
+        ) ENGINE=InnoDB {$charset_collate};";
+
         dbDelta($sql_levels);
         dbDelta($sql_movements);
         dbDelta($sql_moves);
@@ -3540,6 +3554,7 @@ public static function insert_pos_shift($row) {
         dbDelta($sql_kit_components);
         dbDelta($sql_documents);
         dbDelta($sql_barcodes);
+        dbDelta($sql_rfid_tags);
     }
 
     public static function get_site_id_for_warehouse($warehouse_id) {

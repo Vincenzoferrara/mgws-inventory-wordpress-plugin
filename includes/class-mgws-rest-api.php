@@ -1212,6 +1212,27 @@ class MGWS_REST_API {
             'callback' => array($this, 'route_count_schedules_run_due'),
         ));
 
+        register_rest_route('mgws/v1', '/inventory/rfid/tags', array(
+            'methods' => 'GET',
+            'permission_callback' => array($this, 'perm_product_barcodes'),
+            'callback' => array($this, 'route_rfid_tags_get'),
+            'args' => array(
+                'epc' => array('required' => false, 'type' => 'string', 'sanitize_callback' => 'sanitize_text_field'),
+                'product_id' => $this->inventory_non_negative_int_arg(0),
+                'variation_id' => $this->inventory_non_negative_int_arg(0),
+            ),
+        ));
+        register_rest_route('mgws/v1', '/inventory/rfid/tags', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'perm_product_barcodes'),
+            'callback' => array($this, 'route_rfid_tags_upsert'),
+        ));
+        register_rest_route('mgws/v1', '/inventory/rfid/tags/(?P<epc>[^/]+)', array(
+            'methods' => 'DELETE',
+            'permission_callback' => array($this, 'perm_product_barcodes'),
+            'callback' => array($this, 'route_rfid_tags_delete'),
+        ));
+
         register_rest_route('mgws/v1', '/inventory/rfid/scan', array(
             'methods' => 'POST',
             'permission_callback' => array($this, 'perm_stock_move'),
@@ -1222,6 +1243,18 @@ class MGWS_REST_API {
                     'type' => 'array',
                     'sanitize_callback' => array($this, 'sanitize_inventory_tags'),
                     'validate_callback' => array($this, 'validate_inventory_tags'),
+                ),
+                'gtins' => array(
+                    'required' => false,
+                    'type' => 'object',
+                    'sanitize_callback' => array($this, 'sanitize_inventory_gtins'),
+                    'validate_callback' => array($this, 'validate_inventory_gtins'),
+                ),
+                'lookup' => array(
+                    'required' => false,
+                    'type' => 'string',
+                    'sanitize_callback' => 'sanitize_text_field',
+                    'validate_callback' => array($this, 'validate_inventory_lookup'),
                 ),
             ),
         ));
@@ -3908,6 +3941,43 @@ class MGWS_REST_API {
         return true;
     }
 
+    /**
+     * GTIN hints for split RFID lookups: EPC => GTIN string, or EPC => an
+     * object with `gtin` and optional `serial` when the app decoded both.
+     */
+    public function sanitize_inventory_gtins($value) {
+        if (!is_array($value)) { return array(); }
+        $clean = array();
+        foreach ($value as $epc => $hint) {
+            $epc = sanitize_text_field((string) $epc);
+            if ($epc === '') { continue; }
+            if (is_array($hint)) {
+                $clean[$epc] = array(
+                    'gtin' => sanitize_text_field((string) ($hint['gtin'] ?? '')),
+                    'serial' => sanitize_text_field((string) ($hint['serial'] ?? '')),
+                );
+            } else {
+                $clean[$epc] = sanitize_text_field((string) $hint);
+            }
+        }
+        return $clean;
+    }
+
+    public function validate_inventory_gtins($value) {
+        if (!is_array($value)) { return false; }
+        foreach ($value as $epc => $hint) {
+            if (!is_scalar($epc) || strlen((string) $epc) > 191) { return false; }
+            if (is_array($hint)) {
+                if (strlen((string) ($hint['gtin'] ?? '')) > 191 || strlen((string) ($hint['serial'] ?? '')) > 191) { return false; }
+            } elseif (!is_scalar($hint) || strlen((string) $hint) > 191) { return false; }
+        }
+        return true;
+    }
+
+    public function validate_inventory_lookup($value) {
+        return $value === null || $value === '' || (is_scalar($value) && (string) $value === 'split');
+    }
+
     private function is_positive_integer($value) {
         return is_int($value) ? $value > 0 : (is_string($value) && preg_match('/^[1-9][0-9]*$/', $value) === 1);
     }
@@ -6498,6 +6568,47 @@ class MGWS_REST_API {
         return rest_ensure_response(array('ok' => true));
     }
 
+    public function route_rfid_tags_get(WP_REST_Request $request) {
+        $epc = $request->get_param('epc');
+        if ($epc !== null && trim((string) $epc) !== '') {
+            $row = MGWS_Rfid_Tags::get((string) $epc);
+            if (is_wp_error($row)) {
+                return $row;
+            }
+            if (!is_array($row)) {
+                return new WP_Error('mgws_not_found', 'RFID tag not found', array('status' => 404));
+            }
+            return rest_ensure_response($row);
+        }
+        $product_id = (int) $request->get_param('product_id');
+        if ($product_id <= 0) {
+            return new WP_Error('mgws_bad_request', 'epc or product_id is required', array('status' => 400));
+        }
+        $rows = MGWS_Rfid_Tags::list_for_product($product_id, (int) $request->get_param('variation_id'));
+        return rest_ensure_response($rows);
+    }
+
+    public function route_rfid_tags_upsert(WP_REST_Request $request) {
+        $body = $this->inventory_body($request);
+        $result = MGWS_Rfid_Tags::upsert(
+            (string) ($body['epc'] ?? ''),
+            ($body['product_id'] ?? 0),
+            ($body['variation_id'] ?? 0)
+        );
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response($result);
+    }
+
+    public function route_rfid_tags_delete(WP_REST_Request $request) {
+        $result = MGWS_Rfid_Tags::delete((string) $request->get_param('epc'));
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response(array('ok' => true));
+    }
+
     public function route_purchase_order_send(WP_REST_Request $request) {
         $po_id = (int) $request->get_param('purchase_order_id');
         $po = MGWS_DB::get_purchase_order($po_id);
@@ -6589,41 +6700,138 @@ class MGWS_REST_API {
         ));
     }
 
+    /**
+     * Product id, parent id and name for a resolved tag. A variation id is
+     * normalized to its parent exactly as the original barcode scan did.
+     */
+    private function rfid_scan_product_details($product_id, $preferred_variation_id = 0) {
+        $variation_id = (int) $preferred_variation_id;
+        $product_name = '';
+        if (function_exists('wc_get_product')) {
+            $product = wc_get_product($product_id);
+            if ($product && $product->is_type('variation')) {
+                if ($variation_id <= 0) {
+                    $variation_id = (int) $product_id;
+                }
+                $product_id = (int) $product->get_parent_id();
+            }
+            if ($product && method_exists($product, 'get_name')) {
+                $product_name = (string) $product->get_name();
+            }
+        }
+        return array(
+            'product_id' => (int) $product_id,
+            'variation_id' => $variation_id,
+            'product_name' => $product_name,
+        );
+    }
+
     public function route_inventory_rfid_scan(WP_REST_Request $request) {
         $body = $this->inventory_body($request);
         if (!isset($body['tags']) || !$this->validate_inventory_tags($body['tags'])) {
             return new WP_Error('mgws_bad_request', 'tags must be an array', array('status' => 400));
         }
         $tags = $this->sanitize_inventory_tags($body['tags']);
+        $lookup = isset($body['lookup']) ? strtolower(trim((string) $body['lookup'])) : '';
+        $split = $lookup === 'split';
+        $gtins = array();
+        if ($split && !empty($body['gtins']) && $this->validate_inventory_gtins($body['gtins'])) {
+            $gtins = $this->sanitize_inventory_gtins($body['gtins']);
+        }
         $resolved = array();
         $unresolved = array();
 
-        foreach ($tags as $tag) {
-            $product_id = $this->find_product_id_by_barcode($tag);
-            if ($product_id <= 0) {
-                $unresolved[] = array('tag' => $tag, 'reason' => 'tag_not_found');
-                continue;
-            }
-
-            $variation_id = 0;
-            $product_name = '';
-            if (function_exists('wc_get_product')) {
-                $product = wc_get_product($product_id);
-                if ($product && $product->is_type('variation')) {
-                    $variation_id = $product_id;
-                    $product_id = (int) $product->get_parent_id();
+        if (!$split) {
+            // Legacy callers keep resolving tags as stored barcodes.
+            foreach ($tags as $tag) {
+                $product_id = $this->find_product_id_by_barcode($tag);
+                if ($product_id <= 0) {
+                    $unresolved[] = array('tag' => $tag, 'reason' => 'tag_not_found');
+                    continue;
                 }
-                if ($product && method_exists($product, 'get_name')) {
-                    $product_name = (string) $product->get_name();
+                $details = $this->rfid_scan_product_details($product_id);
+                $resolved[] = array(
+                    'tag' => $tag,
+                    'product_id' => $details['product_id'],
+                    'variation_id' => $details['variation_id'],
+                    'product_name' => $details['product_name'],
+                );
+            }
+            $note = 'RFID tags are resolved as stored barcodes only; no stock mutation is inferred from a scan.';
+        } else {
+            // Split mode: GTIN hints classify GS1 tags; opaque tags only use
+            // the EPC registry. This route never writes stock or movements.
+            $epc_by_tag = array();
+            $epcs = array();
+            foreach ($tags as $tag) {
+                $epc = MGWS_Rfid_Tags::normalize($tag);
+                if (is_wp_error($epc)) {
+                    continue;
+                }
+                $epc_by_tag[$tag] = $epc;
+                $epcs[$epc] = $epc;
+            }
+            $rows = MGWS_Rfid_Tags::get_many(array_values($epcs));
+
+            foreach ($tags as $tag) {
+                $epc = $epc_by_tag[$tag] ?? '';
+                $hint = null;
+                if (isset($gtins[$tag])) {
+                    $hint = $gtins[$tag];
+                } elseif ($epc !== '' && isset($gtins[$epc])) {
+                    $hint = $gtins[$epc];
+                }
+                $is_gs1 = $hint !== null;
+                $gtin = '';
+                $serial = '';
+                if (is_array($hint)) {
+                    $gtin = (string) ($hint['gtin'] ?? '');
+                    $serial = (string) ($hint['serial'] ?? '');
+                } elseif ($hint !== null) {
+                    $gtin = (string) $hint;
+                }
+
+                $product_id = 0;
+                $variation_override = 0;
+                $resolution = '';
+                if ($is_gs1 && $gtin !== '') {
+                    $product_id = $this->find_product_id_by_barcode($gtin);
+                    if ($product_id > 0) {
+                        $resolution = 'gs1';
+                    }
+                }
+                if ($product_id <= 0 && $epc !== '') {
+                    $row = $rows[$epc] ?? null;
+                    if (is_array($row)) {
+                        $variation_override = (int) ($row['variation_id'] ?? 0);
+                        $product_id = (int) ($row['product_id'] ?? 0);
+                        if ($product_id > 0) {
+                            $resolution = 'table';
+                        }
+                    }
+                }
+
+                if ($product_id > 0) {
+                    $details = $this->rfid_scan_product_details($product_id, $variation_override);
+                    $resolved[] = array(
+                        'tag' => $tag,
+                        'product_id' => $details['product_id'],
+                        'variation_id' => $details['variation_id'],
+                        'product_name' => $details['product_name'],
+                        'resolution' => $resolution,
+                        'gtin' => $gtin,
+                        'serial' => $serial,
+                    );
+                } else {
+                    $unresolved[] = array(
+                        'tag' => $tag,
+                        'reason' => $is_gs1 ? 'not_associated' : 'epc_not_registered',
+                        'gtin' => $gtin,
+                        'serial' => $serial,
+                    );
                 }
             }
-
-            $resolved[] = array(
-                'tag' => $tag,
-                'product_id' => (int) $product_id,
-                'variation_id' => $variation_id,
-                'product_name' => $product_name,
-            );
+            $note = 'RFID tags are resolved from GTIN hints or the EPC registry only; no stock mutation is inferred from a scan.';
         }
 
         return rest_ensure_response(array(
@@ -6639,7 +6847,7 @@ class MGWS_REST_API {
                 'stock_updates' => 0,
                 'movement_count' => 0,
             ),
-            'note' => 'RFID tags are resolved as stored barcodes only; no stock mutation is inferred from a scan.',
+            'note' => $note,
         ));
     }
 

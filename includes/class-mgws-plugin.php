@@ -25,6 +25,7 @@ require_once __DIR__ . '/class-mgws-payments.php';
 require_once __DIR__ . '/class-mgws-kits.php';
 require_once __DIR__ . '/class-mgws-documents.php';
 require_once __DIR__ . '/class-mgws-product-barcodes.php';
+require_once __DIR__ . '/class-mgws-rfid-tags.php';
 require_once __DIR__ . '/class-mgws-permission-sets.php';
 require_once __DIR__ . '/class-mgws-employee-shifts.php';
 require_once __DIR__ . '/class-mgws-employee-files.php';
@@ -36,7 +37,7 @@ class MGWS_Plugin {
     private static $instance = null;
     private const CAPS_VERSION_OPTION = 'mgws_caps_version';
     private const DB_SCHEMA_VERSION_OPTION = 'mgws_db_schema_version';
-    private const DB_SCHEMA_VERSION = '21';
+    private const DB_SCHEMA_VERSION = '22';
 
     public static function instance() {
         if (self::$instance === null) {
